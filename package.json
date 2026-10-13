@@ -1,17 +1,13 @@
 
 {
-  "name": "htoo-care-telegram-bot",
+  "name": "htoo-care-bot",
   "version": "1.0.0",
-  "private": true,
-  "description": "Htoo Care bilingual healthcare Telegram bot",
+  "description": "Htoo Care healthcare information Telegram bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": ">=20"
-  },
   "dependencies": {
-    "grammy": "^1.30.0"
+    "grammy": "^1.35.0"
   }
 }
