@@ -1,484 +1,399 @@
 
-const TelegramBot = require('node-telegram-bot-api');
-const express = require('express');
-
-const TOKEN = process.env.BOT_TOKEN;
-const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.RENDER_EXTERNAL_URL;
-
-if (!TOKEN) throw new Error('BOT_TOKEN is missing');
-if (!BASE_URL) throw new Error('RENDER_EXTERNAL_URL is missing');
+const express = require("express");
+const TelegramBot = require("node-telegram-bot-api");
 
 const app = express();
 app.use(express.json());
 
+const TOKEN = process.env.BOT_TOKEN;
+const BASE_URL = process.env.RENDER_EXTERNAL_URL;
+
+if (!TOKEN || !BASE_URL) {
+  throw new Error("BOT_TOKEN and RENDER_EXTERNAL_URL are required.");
+}
+
 const bot = new TelegramBot(TOKEN, { polling: false });
 const webhookPath = `/telegram-webhook/${TOKEN}`;
 
-const languages = {};
-const sessions = {};
+const languages = new Map();
+const sessions = new Map();
 
-const data = {
-  my: {
-    welcome:
-      'မင်္ဂလာပါ 👋 Htoo Care မှ ကြိုဆိုပါတယ်။\n\n' +
-      'သင့်ကျန်းမာရေးအတွက် ဘယ်လိုကူညီပေးရမလဲ။ ' +
-      'အောက်က Menu ကို ရွေးချယ်နိုင်သလို မေးချင်တာကိုလည်း ရေးပို့နိုင်ပါတယ်။',
-    menu: [
-      ['🤒 လက္ခဏာစစ်ဆေးရန်'],
-      ['📚 ကျန်းမာရေးအချက်အလက်', '📞 7887 ဆက်သွယ်ရန်'],
-      ['🌐 English']
-    ],
-    symptomIntro:
-      'ကျန်းမာရေးအခြေအနေကို အဆင့်လိုက် မေးမြန်းပေးပါမယ်။ 😊\n\n' +
-      'လက်ရှိ ဘယ်လိုလက္ခဏာ ခံစားနေရပါသလဲ။\n' +
-      'ဥပမာ - ခေါင်းကိုက်ခြင်း၊ ဗိုက်နာခြင်း၊ ဖျားခြင်း၊ ဝမ်းလျှောခြင်း။',
-    emergency:
-      '⚠️ အရေးကြီးတဲ့ မေးခွန်းတစ်ခု အရင်မေးပါမယ်။\n\n' +
-      'အောက်ပါအချက်တွေထဲက တစ်ခုခု လက်ရှိရှိပါသလား။\n' +
-      '• အသက်ရှူရခက်ခြင်း\n' +
-      '• သတိလစ်ခြင်း သို့မဟုတ် တက်ခြင်း\n' +
-      '• ရင်ဘတ်အလွန်နာခြင်း\n' +
-      '• သွေးအများအပြားထွက်ခြင်း\n' +
-      '• ရုတ်တရက် အလွန်ပြင်းထန်သော နာကျင်မှု\n' +
-      '• မူးဝေပြီး လဲကျလုနီးပါးဖြစ်ခြင်း သို့မဟုတ် ရေမသောက်နိုင်ခြင်း',
-    yes: 'ရှိပါတယ်',
-    no: 'မရှိပါ',
-    duration: 'ဒီလက္ခဏာ ဘယ်လောက်ကြာပြီလဲ။',
-    durations: ['ဒီနေ့မှ', '၁–၂ ရက်', '၃–၇ ရက်', '၇ ရက်ကျော်'],
-    severity: 'လက်ရှိအခြေအနေ ဘယ်လိုရှိပါသလဲ။',
-    severities: ['ပေါ့ပါးပါတယ်', 'အလယ်အလတ်', 'ပြင်းထန်ပါတယ်', 'ပိုဆိုးလာနေပါတယ်'],
-    followup:
-      'ကျေးဇူးတင်ပါတယ်။ သင့်အဖြေတွေကို အခြေခံပြီး အထွေထွေလမ်းညွှန်ပေးနိုင်ပါတယ်။ ' +
-      'ဒီ Bot က ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းပေးခြင်း မလုပ်နိုင်ပါဘူး။\n\n' +
-      'နောက်တစ်ဆင့် ဘာလုပ်ချင်ပါသလဲ။',
-    emergencyResult:
-      '⚠️ အရေးပေါ်သတိပေးချက်\n\n' +
-      'သင်ဖော်ပြထားတဲ့ လက္ခဏာတွေက အရေးပေါ်ဆေးကုသမှု လိုအပ်နိုင်ပါတယ်။ ' +
-      'အနီးဆုံး အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။\n\n' +
-      '7887 ကို ဆက်သွယ်ဖို့အတွက် အရေးပေါ်ကုသမှုကို မနှောင့်နှေးစေပါနဲ့။',
-    topics: [
-      ['🍽️ အစာအိမ်နှင့် အစာခြေစနစ်'],
-      ['🤕 ခေါင်းကိုက်ခြင်းနှင့် မူးဝေခြင်း'],
-      ['🌡️ ဖျားခြင်းနှင့် ချောင်းဆိုးခြင်း'],
-      ['💧 ရေဓာတ်နှင့် အာဟာရ'],
-      ['🔄 ပင်မ Menu သို့ ပြန်ရန်']
-    ],
-    topicPrompt: 'ဘယ်ကျန်းမာရေးအကြောင်းအရာကို သိချင်ပါသလဲ။ ရွေးချယ်ပေးပါ။',
-    topicAnswers: {
-      '🍽️ အစာအိမ်နှင့် အစာခြေစနစ်':
-        'အစာခြေစနစ်နဲ့ပတ်သက်ပြီး ဘာကို သိချင်ပါသလဲ။\n\n' +
-        '• ဗိုက်နာခြင်း\n• ရင်ပူခြင်း / အချဉ်ပြန်ခြင်း\n' +
-        '• လေပွခြင်း / အစာမကြေခြင်း\n• ပျို့ခြင်း / အန်ခြင်း\n\n' +
-        'လက်ရှိလက္ခဏာရှိပါက “လက္ခဏာစစ်ဆေးရန်” ကို ရွေးပြီး အဆင့်လိုက် ဖြေဆိုနိုင်ပါတယ်။',
-      '🤕 ခေါင်းကိုက်ခြင်းနှင့် မူးဝေခြင်း':
-        'ခေါင်းကိုက်ခြင်း သို့မဟုတ် မူးဝေခြင်းအကြောင်း သိချင်ပါသလား။\n\n' +
-        'ရုတ်တရက် အလွန်ပြင်းထန်သော ခေါင်းကိုက်ခြင်း၊ ' +
-        'မျက်နှာရွဲ့ခြင်း၊ လက်/ခြေတစ်ဖက် အားနည်းခြင်း သို့မဟုတ် စကားပြောရခက်ခြင်းရှိပါက ' +
-        'အရေးပေါ်ဆေးကုသမှု ချက်ချင်းရယူပါ။',
-      '🌡️ ဖျားခြင်းနှင့် ချောင်းဆိုးခြင်း':
-        'ဖျားခြင်းနဲ့ ချောင်းဆိုးခြင်းမှာ ဖြစ်ပွားချိန်၊ အဖျားပြင်းထန်မှုနဲ့ ' +
-        'အသက်ရှူရခက်ခြင်း ရှိ/မရှိက အရေးကြီးပါတယ်။\n\n' +
-        'အသက်ရှူရခက်ပါက အရေးပေါ်ဆေးကုသမှု ရယူပါ။',
-      '💧 ရေဓာတ်နှင့် အာဟာရ':
-        'ရေဓာတ်နဲ့ အာဟာရအကြောင်း သိရှိဖို့ ရွေးချယ်ပေးတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။\n\n' +
-        'ဝမ်းလျှောခြင်း၊ အန်ခြင်းတို့ကြောင့် ရေဓာတ်ခန်းခြောက်နိုင်ပါတယ်။ ' +
-        'ရေမသောက်နိုင်ခြင်း၊ သတိလစ်ခြင်း သို့မဟုတ် လဲကျလုနီးပါးဖြစ်ခြင်းရှိပါက အရေးပေါ်အကူအညီ ရယူပါ။'
-    },
-    call:
-      '📞 7887 Healthcare Call Center\n\n' +
-      'ကျန်းမာရေးအကြောင်း ဆရာဝန်နှင့် ဆွေးနွေးရန် 7887 သို့ ဆက်သွယ်နိုင်ပါတယ်။\n' +
-      'ခေါ်ဆိုခနှင့် ဝန်ဆောင်မှုရရှိနိုင်မှုကို သင့်ဖုန်းလိုင်းတွင် စစ်ဆေးပါ။\n\n' +
-      'အရေးပေါ်လက္ခဏာရှိပါက အရေးပေါ်ဆေးကုသမှုကို ဦးစားပေးပါ။',
-    disclaimer:
-      'ဤ Bot သည် အထွေထွေကျန်းမာရေးလမ်းညွှန်မှုသာ ပေးနိုင်ပြီး ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆရာဝန်၏ ကုသမှုကို အစားထိုးခြင်း မပြုနိုင်ပါ။',
-    referral:
-      'ဆေးရုံ/ဆေးခန်း လိုအပ်ပါက သင့်မြို့နယ်နှင့် လိုအပ်သော အထူးကုအမျိုးအစားကို ရေးပို့နိုင်ပါတယ်။ ' +
-      'လက်ရှိ Bot တွင် ဆေးရုံစာရင်းကို တိုက်ရိုက်ရှာဖွေတဲ့စနစ် မပါဝင်သေးပါ။'
+const categories = [
+  {
+    my: "🧠 ခေါင်းကိုက်ခြင်းနှင့် အာရုံကြောဆိုင်ရာ",
+    en: "🧠 Headache & Neurological Health",
+    infoMy: "ခေါင်းကိုက်ခြင်း၊ မူးဝေခြင်းနှင့် အိပ်စက်မှုအခက်အခဲများအကြောင်း အထွေထွေအချက်အလက်ကို ရယူနိုင်ပါတယ်။",
+    infoEn: "General information about headaches, dizziness, and sleep difficulties."
   },
+  {
+    my: "🤧 အဖျား၊ အအေးမိနှင့် အသက်ရှူလမ်းကြောင်း",
+    en: "🤧 Fever, Cold & Respiratory Health",
+    infoMy: "အဖျား၊ ချောင်းဆိုး၊ လည်ချောင်းနာနှင့် နှာစေးခြင်းဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about fever, cough, sore throat, and a runny nose."
+  },
+  {
+    my: "🍽️ အစာအိမ်နှင့် အူလမ်းကြောင်း",
+    en: "🍽️ Digestive Health",
+    infoMy: "ဝမ်းလျှော၊ ဝမ်းချုပ်၊ ဗိုက်နာ၊ အန်ခြင်းနှင့် အစာမကြေခြင်းဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about diarrhoea, constipation, stomach pain, vomiting, and indigestion."
+  },
+  {
+    my: "❤️ နာတာရှည်ရောဂါများ",
+    en: "❤️ Chronic Conditions",
+    infoMy: "သွေးတိုး၊ ဆီးချို၊ နှလုံးရောဂါနှင့် ကိုလက်စထရောအကြောင်း။ ပုံမှန်ဆေးစစ်မှုနှင့် ဆရာဝန်၏ အကြံပြုချက်ကို လိုက်နာပါ။",
+    infoEn: "Information about hypertension, diabetes, heart disease, and cholesterol. Follow your clinician's advice and regular check-ups."
+  },
+  {
+    my: "🤰 မိခင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
+    en: "🤰 Maternal & Reproductive Health",
+    infoMy: "ကိုယ်ဝန်ဆောင်စောင့်ရှောက်မှု၊ ရာသီလာခြင်းနှင့် သားဆက်ခြားခြင်းဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about pregnancy care, menstruation, and contraception."
+  },
+  {
+    my: "🩹 အရေပြားနှင့် ဓာတ်မတည့်ခြင်း",
+    en: "🩹 Skin & Allergies",
+    infoMy: "ယားယံခြင်း၊ အဖုထွက်ခြင်းနှင့် ဓာတ်မတည့်ခြင်းဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about itching, rashes, and allergies."
+  },
+  {
+    my: "💚 စိတ်ကျန်းမာရေး",
+    en: "💚 Mental Health",
+    infoMy: "စိတ်ဖိစီးမှု၊ စိုးရိမ်ပူပန်မှုနှင့် အိပ်စက်မှုအခက်အခဲများအကြောင်း။",
+    infoEn: "General information about stress, anxiety, and sleep difficulties."
+  },
+  {
+    my: "🦴 အရိုး၊ အဆစ်နှင့် ကြွက်သား",
+    en: "🦴 Bones, Joints & Muscles",
+    infoMy: "ခါးနာ၊ လည်ပင်းနာ၊ အဆစ်နာနှင့် ကြွက်သားနာခြင်းဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about back, neck, joint, and muscle pain."
+  },
+  {
+    my: "👁️ မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွား",
+    en: "👁️ Eye, Ear, Nose & Dental Health",
+    infoMy: "မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွားကျန်းမာရေးအတွက် အထွေထွေအချက်အလက်များ။",
+    infoEn: "General information about eye, ear, nose, and dental health."
+  },
+  {
+    my: "👶 ကလေးကျန်းမာရေးနှင့် ကာကွယ်ဆေး",
+    en: "👶 Child Health & Vaccination",
+    infoMy: "ကလေးစောင့်ရှောက်မှု၊ အာဟာရနှင့် ကာကွယ်ဆေးဆိုင်ရာ အချက်အလက်များ။",
+    infoEn: "General information about child care, nutrition, and vaccination."
+  },
+  {
+    my: "🥗 အာဟာရ၊ ရေဓာတ်နှင့် ကိုယ်အလေးချိန်",
+    en: "🥗 Nutrition, Hydration & Weight",
+    infoMy: "အာဟာရမျှတစွာစားသုံးခြင်း၊ ရေလုံလောက်စွာသောက်ခြင်းနှင့် ကျန်းမာသော ကိုယ်အလေးချိန်အကြောင်း။",
+    infoEn: "General information about balanced nutrition, hydration, and healthy weight."
+  },
+  {
+    my: "🚻 ဆီးလမ်းကြောင်းဆိုင်ရာ",
+    en: "🚻 Urinary Health",
+    infoMy: "ဆီးကျင်ခြင်း၊ ဆီးခဏခဏသွားခြင်းနှင့် ဆီးလမ်းကြောင်းဆိုင်ရာ လက္ခဏာများ။",
+    infoEn: "General information about painful or frequent urination and urinary symptoms."
+  },
+  {
+    my: "🚑 ထိခိုက်ဒဏ်ရာနှင့် အရေးပေါ်အခြေအနေ",
+    en: "🚑 Injuries & Emergencies",
+    infoMy: "ထိခိုက်ဒဏ်ရာ သို့မဟုတ် အရေးပေါ်လက္ခဏာများရှိပါက ချက်ချင်းဆေးကုသမှုရယူပါ။",
+    infoEn: "For serious injuries or emergency warning signs, seek urgent medical care."
+  }
+];
 
+const text = {
+  my: {
+    welcome: "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။ 💚\n\nကျန်းမာရေးအချက်အလက်များ ကြည့်ရှုရန် သို့မဟုတ် လက္ခဏာများကို အဆင့်လိုက် ပြောပြရန် အောက်ပါ Menu ကို ရွေးချယ်ပါ။",
+    health: "📚 ကျန်းမာရေးအချက်အလက်",
+    symptoms: "🤒 လက္ခဏာစစ်ဆေးရန်",
+    contact: "📞 7887 ဆက်သွယ်ရန်",
+    language: "🌐 English",
+    back: "🏠 ပင်မ Menu",
+    chooseHealth: "ကျန်းမာရေးအမျိုးအစားကို ရွေးချယ်ပါ။",
+    symptomAsk: "ဘယ်လိုလက္ခဏာ ခံစားနေရပါသလဲ။ ဥပမာ - ခေါင်းကိုက်၊ အဖျားတက်၊ ဝမ်းလျှော။",
+    redFlagAsk: "အသက်ရှူမဝခြင်း၊ ရင်ဘတ်အောင့်ခြင်း၊ သတိလစ်ခြင်း၊ ရုတ်တရက် စကားမပြောနိုင်ခြင်း သို့မဟုတ် ကိုယ်တစ်ဖက်အားနည်းခြင်းလို အရေးပေါ်လက္ခဏာ ရှိပါသလား။",
+    yes: "ရှိပါတယ်",
+    no: "မရှိပါ",
+    duration: "ဒီလက္ခဏာ ဘယ်လောက်ကြာပြီလဲ။ ဥပမာ - ဒီနေ့မှ၊ ၂ ရက်၊ ၁ ပတ်။",
+    severity: "လက္ခဏာပြင်းထန်မှုကို ရွေးချယ်ပါ။",
+    mild: "အနည်းငယ်",
+    moderate: "အလယ်အလတ်",
+    severe: "ပြင်းထန်",
+    summary: "အချက်အလက်ပေးတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။ ဒီအချက်အလက်တွေက ရောဂါအတည်ပြုချက် မဟုတ်ပါဘူး။ လက္ခဏာမသက်သာခြင်း၊ ပိုဆိုးလာခြင်း သို့မဟုတ် စိုးရိမ်စရာရှိပါက ဆရာဝန်နဲ့ တိုင်ပင်ပါ။",
+    emergency: "🚨 အရေးပေါ်သတိပေးချက်\n\nသင်ဖော်ပြထားသော လက္ခဏာသည် အရေးပေါ်အခြေအနေ ဖြစ်နိုင်ပါတယ်။ Bot နဲ့ ဆက်လက်မေးခွန်းဖြေဆိုခြင်းကို ရပ်ပြီး အနီးဆုံး အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။ လုံခြုံစွာ သွားလာနိုင်ခြင်းမရှိပါက ဒေသဆိုင်ရာ အရေးပေါ်အကူအညီကို ခေါ်ပါ။",
+    emergencyYes: "အရေးပေါ်လက္ခဏာရှိကြောင်း ပြောပြထားတဲ့အတွက် ပုံမှန်မေးခွန်းများကို ရပ်လိုက်ပါတယ်။ ချက်ချင်းဆေးကုသမှု ရယူပါ။",
+    contactInfo: "📞 7887 Healthcare Call Center\n\n7887 ကို ဖုန်းခေါ်ဆိုပြီး ကျန်းမာရေးအကြံဉာဏ်ရယူရန် ကြိုးစားနိုင်ပါတယ်။ ဖုန်းခေါ်ဆိုခနှင့် ဝန်ဆောင်မှုရရှိနိုင်မှုသည် သင့်ဖုန်းလိုင်းနှင့် လက်ရှိဝန်ဆောင်မှုအခြေအနေပေါ် မူတည်နိုင်ပါတယ်။ အရေးပေါ်အခြေအနေတွင် 7887 အဖြေကို စောင့်မနေဘဲ အရေးပေါ်ဆေးကုသမှု ရယူပါ။",
+    healthDisclaimer: "\n\n⚠️ အထွေထွေကျန်းမာရေးအချက်အလက်သာ ဖြစ်ပါတယ်။ ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မဟုတ်ပါ။",
+    fallback: "မေးမြန်းချက်ကို နားလည်ရန် ခက်ခဲနေပါတယ်။ အောက်ပါ Menu ကို ရွေးချယ်ပါ။",
+    mainMenu: "ပင်မ Menu ကို ပြန်ရောက်ပါပြီ။",
+    topicPrefix: "📚 ကျန်းမာရေးအချက်အလက်\n\n"
+  },
   en: {
-    welcome:
-      'Hello 👋 Welcome to Htoo Care!\n\n' +
-      'How can I help with your health today? Choose an option or type your question.',
-    menu: [
-      ['🤒 Check Symptoms'],
-      ['📚 Health Information', '📞 Contact 7887'],
-      ['🌐 မြန်မာဘာသာ']
-    ],
-    symptomIntro:
-      'Let’s go step by step. 😊\n\n' +
-      'What symptom are you experiencing? For example: headache, stomach pain, fever, or diarrhoea.',
-    emergency:
-      '⚠️ First, an important safety question.\n\n' +
-      'Do you currently have any of these warning signs?\n' +
-      '• Difficulty breathing\n• Loss of consciousness or seizure\n' +
-      '• Severe chest pain\n• Heavy bleeding\n' +
-      '• Sudden, extremely severe pain\n' +
-      '• Near-fainting or inability to drink fluids',
-    yes: 'Yes',
-    no: 'No',
-    duration: 'How long have you had this symptom?',
-    durations: ['Started today', '1–2 days', '3–7 days', 'More than 7 days'],
-    severity: 'How severe is it now?',
-    severities: ['Mild', 'Moderate', 'Severe', 'Getting worse'],
-    followup:
-      'Thank you. I can provide general guidance based on your answers, but this bot cannot diagnose conditions or prescribe treatment.\n\nWhat would you like to do next?',
-    emergencyResult:
-      '⚠️ Emergency warning\n\nYour symptoms may require urgent medical care. Seek emergency medical help immediately. Do not delay emergency care to contact 7887.',
-    topics: [
-      ['🍽️ Digestive Health'],
-      ['🤕 Headache and Dizziness'],
-      ['🌡️ Fever and Cough'],
-      ['💧 Hydration and Nutrition'],
-      ['🔄 Back to Main Menu']
-    ],
-    topicPrompt: 'Which health topic would you like to explore?',
-    topicAnswers: {
-      '🍽️ Digestive Health':
-        'What would you like to learn about?\n\n' +
-        '• Stomach pain\n• Heartburn / acid reflux\n' +
-        '• Bloating / indigestion\n• Nausea / vomiting\n\n' +
-        'If you have symptoms, select Check Symptoms for step-by-step questions.',
-      '🤕 Headache and Dizziness':
-        'Sudden, extremely severe headache, facial drooping, weakness on one side, or difficulty speaking may be an emergency. Seek emergency medical care immediately if these occur.',
-      '🌡️ Fever and Cough':
-        'Duration, severity, and breathing difficulty are important when assessing fever or cough. Seek emergency care if breathing is difficult.',
-      '💧 Hydration and Nutrition':
-        'Diarrhoea and vomiting can cause dehydration. Seek urgent care if you cannot drink, faint, or become severely weak.'
-    },
-    call:
-      '📞 7887 Healthcare Call Center\n\n' +
-      'You may contact 7887 to discuss your health with a healthcare professional. Check call charges and service availability with your operator.\n\n' +
-      'For emergencies, seek emergency care first.',
-    disclaimer:
-      'This bot provides general health guidance only. It does not diagnose conditions or replace a qualified healthcare professional.',
-    referral:
-      'Please provide your township and the type of care you need. This bot cannot yet search a live hospital directory.'
+    welcome: "Welcome to Htoo Care. 💚\n\nChoose an option below for health information or guided symptom intake.",
+    health: "📚 Health Information",
+    symptoms: "🤒 Check Symptoms",
+    contact: "📞 Contact 7887",
+    language: "🌐 မြန်မာဘာသာ",
+    back: "🏠 Main Menu",
+    chooseHealth: "Choose a health category.",
+    symptomAsk: "What symptom are you experiencing? For example: headache, fever, or diarrhoea.",
+    redFlagAsk: "Do you have any emergency warning signs, such as difficulty breathing, chest pain, loss of consciousness, sudden difficulty speaking, or sudden weakness on one side?",
+    yes: "Yes",
+    no: "No",
+    duration: "How long have you had this symptom? For example: today, 2 days, or 1 week.",
+    severity: "Choose the severity of your symptom.",
+    mild: "Mild",
+    moderate: "Moderate",
+    severe: "Severe",
+    summary: "Thank you for sharing. This is not a diagnosis. Consult a healthcare professional if symptoms persist, worsen, or concern you.",
+    emergency: "🚨 EMERGENCY WARNING\n\nYour symptoms may indicate an emergency. Stop this chat assessment and seek urgent medical care now. If you cannot travel safely, contact local emergency services.",
+    emergencyYes: "You reported an emergency warning sign. The routine questions have stopped. Please seek urgent medical care now.",
+    contactInfo: "📞 7887 Healthcare Call Center\n\nYou may try calling 7887 for health guidance. Call charges and availability may depend on your phone network and current service arrangements. For an emergency, do not wait for a 7887 response; seek urgent medical care.",
+    healthDisclaimer: "\n\n⚠️ General health information only. This is not a diagnosis or prescription.",
+    fallback: "Sorry, I didn't understand. Please choose an option from the menu.",
+    mainMenu: "You are back at the main menu.",
+    topicPrefix: "📚 Health Information\n\n"
   }
 };
 
-function menu(lang) {
+function getLang(id) {
+  return languages.get(id) || "my";
+}
+
+function tr(id) {
+  return text[getLang(id)];
+}
+
+function mainKeyboard(id) {
+  const t = tr(id);
   return {
-    reply_markup: {
-      keyboard: data[lang].menu,
-      resize_keyboard: true
-    }
+    keyboard: [
+      [t.health],
+      [t.symptoms],
+      [t.contact, t.language]
+    ],
+    resize_keyboard: true
   };
 }
 
-function choices(items) {
+function topicKeyboard(id) {
+  const lang = getLang(id);
+  const rows = [];
+  for (let i = 0; i < categories.length; i += 2) {
+    rows.push(categories.slice(i, i + 2).map(c => c[lang]));
+  }
+  rows.push([tr(id).back]);
+  return { keyboard: rows, resize_keyboard: true };
+}
+
+function choiceKeyboard(id, options) {
   return {
-    reply_markup: {
-      keyboard: items.map(item => [item]),
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
+    keyboard: options.map(option => [option]),
+    resize_keyboard: true,
+    one_time_keyboard: true
   };
 }
 
-function clearSession(id) {
-  delete sessions[id];
+function send(id, message, keyboard = mainKeyboard(id)) {
+  return bot.sendMessage(id, message, { reply_markup: keyboard });
 }
 
-function send(id, text, extra = {}) {
-  return bot.sendMessage(id, text, extra).catch(error => {
-    console.error('sendMessage failed:', error.message);
+function isYes(value, lang) {
+  const s = value.trim().toLowerCase();
+  return lang === "my"
+    ? ["ရှိပါတယ်", "ရှိ", "ဟုတ်", "ဟုတ်ကဲ့", "ရှိတယ်"].includes(s)
+    : ["yes", "y", "yes please"].includes(s);
+}
+
+function isNo(value, lang) {
+  const s = value.trim().toLowerCase();
+  return lang === "my"
+    ? ["မရှိပါ", "မရှိ", "မရှိဘူး", "မရှိပါဘူး", "မဟုတ်"].includes(s)
+    : ["no", "n", "nope"].includes(s);
+}
+
+function emergencyDetected(value) {
+  const s = value.toLowerCase();
+
+  const patterns = [
+    /အသက်ရှူမဝ|အသက်ရှူမရ|အသက်ရှူခက်|အသက်ရှူကြပ်/,
+    /ရင်ဘတ်အောင့်|ရင်ဘတ်အရမ်းနာ|ရင်ဘတ်နာ/,
+    /သတိလစ်|သတိမရ|မေ့လဲ/,
+    /သွေးအများကြီးထွက်|သွေးမတိတ်/,
+    /တက်နေ|တက်ခြင်း|တက်သွား/,
+    /စကားမပြောနိုင်|စကားပြောမရ|ကိုယ်တစ်ဖက်အားနည်း|မျက်နှာရွဲ့/,
+    /လည်ချောင်းပိတ်|လျှာဖောင်း|မျက်နှာဖောင်း/,
+    /suicidal|kill myself|want to die|can't breathe|cannot breathe|difficulty breathing|shortness of breath|chest pain|unconscious|passed out|severe bleeding|face drooping|one-sided weakness|throat closing|tongue swelling/
+  ];
+
+  return patterns.some(pattern => pattern.test(s));
+}
+
+function detectCategory(value, lang) {
+  return categories.findIndex(c =>
+    value.trim() === c[lang] ||
+    value.trim() === c.my ||
+    value.trim() === c.en
+  );
+}
+
+function startSymptoms(id) {
+  sessions.set(id, { flow: "symptom", step: "symptom" });
+  return send(id, tr(id).symptomAsk, {
+    keyboard: [[tr(id).back]],
+    resize_keyboard: true
   });
-}
-
-function startSymptoms(id, lang, symptom = '') {
-  sessions[id] = { step: 'emergency', symptom };
-  return send(id, data[lang].emergency, choices([
-    data[lang].yes,
-    data[lang].no
-  ]));
-}
-
-function normalize(text) {
-  return text.toLowerCase().trim();
-}
-
-function detectSymptom(text, lang) {
-  const t = normalize(text);
-
-  const groups = lang === 'my'
-    ? [
-        { name: 'ခေါင်းကိုက်ခြင်း', keys: ['ခေါင်းကိုက်', 'ခေါင်းနာ', 'မူးဝေ'] },
-        { name: 'အစာအိမ်နှင့် ဗိုက်နာခြင်း', keys: ['အစာအိမ်', 'ဗိုက်နာ', 'ရင်ပူ', 'အစာမကြေ', 'လေပွ', 'အချဉ်ပြန်'] },
-        { name: 'ဝမ်းလျှောခြင်း', keys: ['ဝမ်းလျှော', 'ဝမ်းသွား'] },
-        { name: 'ဖျားခြင်း', keys: ['ဖျား', 'အဖျား'] },
-        { name: 'ချောင်းဆိုးခြင်း', keys: ['ချောင်းဆိုး', 'ချောင်းခြောက်'] },
-        { name: 'ပျို့ခြင်းနှင့် အန်ခြင်း', keys: ['ပျို့', 'အန်'] }
-      ]
-    : [
-        { name: 'Headache or dizziness', keys: ['headache', 'head pain', 'dizzy', 'dizziness'] },
-        { name: 'Digestive or stomach symptoms', keys: ['stomach', 'stomach pain', 'heartburn', 'indigestion', 'bloating', 'acid reflux'] },
-        { name: 'Diarrhoea', keys: ['diarrhea', 'diarrhoea', 'loose stool'] },
-        { name: 'Fever', keys: ['fever', 'temperature'] },
-        { name: 'Cough', keys: ['cough'] },
-        { name: 'Nausea or vomiting', keys: ['nausea', 'vomiting', 'vomit'] }
-      ];
-
-  return groups.find(group => group.keys.some(key => t.includes(key)))?.name || '';
 }
 
 async function handleMessage(msg) {
-  if (!msg.text || msg.chat.type !== 'private') return;
+  if (!msg.text || !msg.chat) return;
 
-  const id = msg.chat.id;
-  const text = msg.text.trim();
+  const id = String(msg.chat.id);
+  const input = msg.text.trim();
+  const lang = getLang(id);
+  const t = tr(id);
 
-  if (text === '/start' || text === '/restart') {
-    languages[id] = 'my';
-    clearSession(id);
-    return send(id, data.my.welcome, menu('my'));
+  if (input === "/start" || input === "/menu") {
+    sessions.delete(id);
+    return send(id, t.welcome);
   }
 
-  if (text === '/cancel') {
-    clearSession(id);
-    const lang = languages[id] || 'my';
-    return send(id, data[lang].welcome, menu(lang));
+  if (input === "/language") {
+    return send(id, "Choose your language / ဘာသာစကားရွေးချယ်ပါ။", {
+      keyboard: [["မြန်မာဘာသာ", "English"]],
+      resize_keyboard: true
+    });
   }
 
-  if (text === '🌐 English') {
-    languages[id] = 'en';
-    clearSession(id);
-    return send(id, data.en.welcome, menu('en'));
+  if (input === "English" || input === "🌐 English") {
+    languages.set(id, "en");
+    sessions.delete(id);
+    return send(id, text.en.welcome, mainKeyboard(id));
   }
 
-  if (text === '🌐 မြန်မာဘာသာ') {
-    languages[id] = 'my';
-    clearSession(id);
-    return send(id, data.my.welcome, menu('my'));
+  if (input === "မြန်မာဘာသာ" || input === "🌐 မြန်မာဘာသာ") {
+    languages.set(id, "my");
+    sessions.delete(id);
+    return send(id, text.my.welcome, mainKeyboard(id));
   }
 
-  const lang = languages[id] || 'my';
-  const d = data[lang];
-
-  if (text === '🔄 ပင်မ Menu သို့ ပြန်ရန်' ||
-      text === '🔄 Back to Main Menu') {
-    clearSession(id);
-    return send(id, d.welcome, menu(lang));
+  if (input === t.back || input === "🏠 Main Menu" || input === "🏠 ပင်မ Menu") {
+    sessions.delete(id);
+    return send(id, t.mainMenu, mainKeyboard(id));
   }
 
-  if (text === '🤒 လက္ခဏာစစ်ဆေးရန်' ||
-      text === '🤒 Check Symptoms') {
-    clearSession(id);
-    sessions[id] = { step: 'symptom' };
-    return send(id, d.symptomIntro, menu(lang));
+  // Check emergency signs before continuing routine symptom questions.
+  // Yes/no answers are handled by the current guided question below.
+  const session = sessions.get(id);
+  const isExpectedYesNo = session &&
+    ["redflags"].includes(session.step) &&
+    (isYes(input, lang) || isNo(input, lang));
+
+  if (!isExpectedYesNo && emergencyDetected(input)) {
+    sessions.delete(id);
+    return send(id, t.emergency, mainKeyboard(id));
   }
 
-  if (text === '📚 ကျန်းမာရေးအချက်အလက်' ||
-      text === '📚 Health Information') {
-    clearSession(id);
-    sessions[id] = { step: 'topic' };
-    return send(id, d.topicPrompt, choices(
-      d.topics.flat().filter(item =>
-        item !== '🔄 ပင်မ Menu သို့ ပြန်ရန်' &&
-        item !== '🔄 Back to Main Menu'
-      )
-    ));
+  if (input === t.health) {
+    sessions.set(id, { flow: "health", step: "topic" });
+    return send(id, t.chooseHealth, topicKeyboard(id));
   }
 
-  if (text === '📞 7887 ဆက်သွယ်ရန်' ||
-      text === '📞 Contact 7887') {
-    clearSession(id);
-    return send(id, d.call, menu(lang));
+  if (input === t.symptoms) {
+    return startSymptoms(id);
   }
 
-  if (text === '🏥 ဆေးရုံ/ဆေးခန်းညွှန်းရန်' ||
-      text === '🏥 Hospital Referral') {
-    sessions[id] = { step: 'referral' };
-    return send(id, d.referral);
+  if (input === t.contact) {
+    sessions.delete(id);
+    return send(id, t.contactInfo, mainKeyboard(id));
   }
 
-  const session = sessions[id];
+  const categoryIndex = detectCategory(input, lang);
+  if (categoryIndex !== -1) {
+    const category = categories[categoryIndex];
+    sessions.delete(id);
+    const info = category[lang === "my" ? "infoMy" : "infoEn"];
+    return send(id, t.topicPrefix + category[lang] + "\n\n" + info + t.healthDisclaimer, mainKeyboard(id));
+  }
 
-  // If no conversation is active, detect common health topics.
-  if (!session) {
-    const symptom = detectSymptom(text, lang);
-    if (symptom) {
-      sessions[id] = { step: 'emergency', symptom };
-      return send(
-        id,
-        `${lang === 'my' ? 'သင်ဖော်ပြထားတဲ့ လက္ခဏာ' : 'You mentioned'}: ${symptom}\n\n${d.emergency}`,
-        choices([d.yes, d.no])
-      );
+  if (session && session.flow === "symptom") {
+    if (session.step === "symptom") {
+      session.symptom = input;
+      session.step = "redflags";
+      sessions.set(id, session);
+      return send(id, t.redFlagAsk, choiceKeyboard(id, [t.yes, t.no]));
     }
 
-    sessions[id] = { step: 'topic' };
-    return send(id, d.topicPrompt, choices(
-      d.topics.flat().filter(item =>
-        item !== '🔄 ပင်မ Menu သို့ ပြန်ရန်' &&
-        item !== '🔄 Back to Main Menu'
-      )
-    ));
-  }
-
-  if (session.step === 'symptom') {
-    if (text.length > 400) {
-      return send(id, lang === 'my'
-        ? 'လက္ခဏာကို အတိုချုံးပြီး ရေးပေးပါ။'
-        : 'Please briefly describe your symptom.');
-    }
-
-    session.symptom = text;
-    session.step = 'emergency';
-
-    return send(id, d.emergency, choices([d.yes, d.no]));
-  }
-
-  if (session.step === 'emergency') {
-    if (text === d.yes) {
-      clearSession(id);
-      return send(id, d.emergencyResult, {
-        reply_markup: {
-          keyboard: [
-            ['📞 ' + (lang === 'my' ? '7887 ဆက်သွယ်ရန်' : 'Contact 7887')],
-            ['🔄 ' + (lang === 'my' ? 'ပင်မ Menu သို့ ပြန်ရန်' : 'Back to Main Menu')]
-          ],
-          resize_keyboard: true
-        }
-      });
-    }
-
-    if (text !== d.no) {
-      return send(
-        id,
-        lang === 'my'
-          ? 'ကျေးဇူးပြု၍ “ရှိပါတယ်” သို့မဟုတ် “မရှိပါ” ကို ရွေးပါ။'
-          : 'Please choose Yes or No.',
-        choices([d.yes, d.no])
-      );
-    }
-
-    session.step = 'duration';
-    return send(id, d.duration, choices(d.durations));
-  }
-
-  if (session.step === 'duration') {
-    if (!d.durations.includes(text)) {
-      return send(
-        id,
-        lang === 'my'
-          ? 'အောက်ပါထဲမှ ကြာချိန်ကို ရွေးပေးပါ။'
-          : 'Please select a duration.',
-        choices(d.durations)
-      );
-    }
-
-    session.duration = text;
-    session.step = 'severity';
-    return send(id, d.severity, choices(d.severities));
-  }
-
-  if (session.step === 'severity') {
-    if (!d.severities.includes(text)) {
-      return send(
-        id,
-        lang === 'my'
-          ? 'အောက်ပါထဲမှ အခြေအနေကို ရွေးပေးပါ။'
-          : 'Please select the severity.',
-        choices(d.severities)
-      );
-    }
-
-    session.severity = text;
-    clearSession(id);
-
-    return send(
-      id,
-      `${d.followup}\n\n${d.disclaimer}`,
-      {
-        reply_markup: {
-          keyboard: [
-            ['📞 ' + (lang === 'my' ? '7887 ဆက်သွယ်ရန်' : 'Contact 7887')],
-            ['🤒 ' + (lang === 'my' ? 'လက္ခဏာစစ်ဆေးရန်' : 'Check Symptoms')],
-            ['🔄 ' + (lang === 'my' ? 'ပင်မ Menu သို့ ပြန်ရန်' : 'Back to Main Menu')]
-          ],
-          resize_keyboard: true
-        }
+    if (session.step === "redflags") {
+      if (isYes(input, lang)) {
+        sessions.delete(id);
+        return send(id, t.emergencyYes, mainKeyboard(id));
       }
-    );
-  }
 
-  if (session.step === 'topic') {
-    if (d.topicAnswers[text]) {
-      return send(
-        id,
-        `${d.topicAnswers[text]}\n\n${d.disclaimer}`,
-        {
-          reply_markup: {
-            keyboard: [
-              ['🤒 ' + (lang === 'my' ? 'လက္ခဏာစစ်ဆေးရန်' : 'Check Symptoms')],
-              ['📞 ' + (lang === 'my' ? '7887 ဆက်သွယ်ရန်' : 'Contact 7887')],
-              ['🔄 ' + (lang === 'my' ? 'ပင်မ Menu သို့ ပြန်ရန်' : 'Back to Main Menu')]
-            ],
-            resize_keyboard: true
-          }
-        }
-      );
+      if (isNo(input, lang)) {
+        session.step = "duration";
+        sessions.set(id, session);
+        return send(id, t.duration, {
+          keyboard: [[t.back]],
+          resize_keyboard: true
+        });
+      }
+
+      return send(id, t.redFlagAsk, choiceKeyboard(id, [t.yes, t.no]));
     }
 
-    const symptom = detectSymptom(text, lang);
-    if (symptom) {
-      sessions[id] = { step: 'emergency', symptom };
-      return send(id, d.emergency, choices([d.yes, d.no]));
+    if (session.step === "duration") {
+      session.duration = input;
+      session.step = "severity";
+      sessions.set(id, session);
+      return send(id, t.severity, choiceKeyboard(id, [t.mild, t.moderate, t.severe]));
     }
 
-    return send(
-      id,
-      lang === 'my'
-        ? 'ဒီခေါင်းစဉ်အတွက် အတည်ပြုထားတဲ့ အချက်အလက် မရှိသေးပါ။ လက္ခဏာစစ်ဆေးနိုင်သလို 7887 ကိုလည်း ဆက်သွယ်နိုင်ပါတယ်။'
-        : 'Verified information for this topic is not available yet. You can check symptoms or contact 7887.',
-      menu(lang)
-    );
+    if (session.step === "severity") {
+      session.severity = input;
+      sessions.delete(id);
+
+      const summary = lang === "my"
+        ? `📝 သင့်အဖြေများ\n\n• လက္ခဏာ: ${session.symptom}\n• ဖြစ်ပွားချိန်: ${session.duration}\n• ပြင်းထန်မှု: ${input}\n\n${t.summary}`
+        : `📝 Your responses\n\n• Symptom: ${session.symptom}\n• Duration: ${session.duration}\n• Severity: ${input}\n\n${t.summary}`;
+
+      return send(id, summary, mainKeyboard(id));
+    }
   }
 
-  if (session.step === 'referral') {
-    clearSession(id);
-    return send(id, d.referral, menu(lang));
+  if (session && session.flow === "health" && session.step === "topic") {
+    return send(id, t.chooseHealth, topicKeyboard(id));
   }
 
-  clearSession(id);
-  return send(id, d.welcome, menu(lang));
+  return send(id, t.fallback, mainKeyboard(id));
 }
 
-bot.on('message', msg => {
-  handleMessage(msg).catch(error => {
-    console.error('Message handler error:', error.message);
-    if (msg.chat?.id) {
-      send(
-        msg.chat.id,
-        'တောင်းပန်ပါတယ်။ ခဏတာ အမှားတစ်ခု ဖြစ်သွားပါတယ်။ /start ကို ပြန်နှိပ်ပြီး စမ်းကြည့်ပါ။'
-      );
-    }
+bot.on("message", (msg) => {
+  handleMessage(msg).catch(err => {
+    console.error("Message handling error:", err.message);
   });
 });
 
-app.get('/', (req, res) => {
-  res.status(200).send('Htoo Care Bot is running.');
+app.get("/", (req, res) => {
+  res.status(200).send("Htoo Care Telegram Bot is running.");
 });
 
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok' });
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
-app.post('*', (req, res) => {
-  if (req.path !== webhookPath) return res.sendStatus(404);
-
+app.post(webhookPath, (req, res) => {
   res.sendStatus(200);
   bot.processUpdate(req.body);
 });
+
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
   console.log(`Htoo Care server listening on port ${PORT}`);
 
   try {
     await bot.setWebHook(`${BASE_URL}${webhookPath}`);
-    console.log('Telegram webhook configured.');
-  } catch (error) {
-    console.error('Webhook setup failed:', error.message);
+    console.log("Telegram webhook configured.");
+  } catch (err) {
+    console.error("Webhook setup failed:", err.message);
   }
 });
