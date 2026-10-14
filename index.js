@@ -6,10 +6,10 @@ const app = express();
 app.use(express.json());
 
 const TOKEN = process.env.BOT_TOKEN;
-const BASE_URL = process.env.RENDER_EXTERNAL_URL;
+const BASE_URL = (process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/, "");
 
 if (!TOKEN || !BASE_URL) {
-  throw new Error("BOT_TOKEN and RENDER_EXTERNAL_URL are required.");
+  throw new Error("Please set BOT_TOKEN and RENDER_EXTERNAL_URL in Render.");
 }
 
 const bot = new TelegramBot(TOKEN, { polling: false });
@@ -20,96 +20,191 @@ const sessions = new Map();
 
 const categories = [
   {
-    my: "🧠 ခေါင်းကိုက်ခြင်းနှင့် အာရုံကြောဆိုင်ရာ",
-    en: "🧠 Headache & Neurological Health",
-    infoMy: "ခေါင်းကိုက်ခြင်း၊ မူးဝေခြင်းနှင့် အိပ်စက်မှုအခက်အခဲများအကြောင်း အထွေထွေအချက်အလက်ကို ရယူနိုင်ပါတယ်။",
-    infoEn: "General information about headaches, dizziness, and sleep difficulties."
+    icon: "🧠",
+    my: "ခေါင်းကိုက်ခြင်းနှင့် အာရုံကြောဆိုင်ရာ",
+    en: "Headache & Neurological Health",
+    basicMy: "ခေါင်းကိုက်ခြင်းနှင့် မူးဝေခြင်းသည် အကြောင်းရင်းများစွာကြောင့် ဖြစ်နိုင်ပါတယ်။ အိပ်ရေးဝဝအိပ်ပါ၊ ရေဓာတ်လုံလောက်အောင် ဖြည့်တင်းပါ။ လက္ခဏာဖြစ်ပွားချိန်နှင့် တွဲဖက်လက္ခဏာများကို မှတ်သားထားပါ။",
+    basicEn: "Headaches and dizziness can have many causes. Get enough sleep, stay hydrated, and note when symptoms occur and what other symptoms accompany them.",
+    preventMy: "ပုံမှန်အိပ်ချိန်ထားပါ၊ ရေသောက်ပါ၊ အစာပုံမှန်စားပါ။ ခေါင်းကိုက်စေသော အကြောင်းရင်းများကို သတိထားမှတ်သားပါ။",
+    preventEn: "Maintain a regular sleep schedule, drink enough water, eat regularly, and note possible headache triggers.",
+    warningMy: "ရုတ်တရက် အလွန်ပြင်းထန်သော ခေါင်းကိုက်ခြင်း၊ ကိုယ်တစ်ဖက်အားနည်းခြင်း၊ စကားပြောခက်ခြင်း သို့မဟုတ် သတိလစ်ခြင်းသည် အရေးပေါ်လက္ခဏာ ဖြစ်နိုင်ပါတယ်။",
+    warningEn: "A sudden, extremely severe headache, one-sided weakness, difficulty speaking, or loss of consciousness may be an emergency.",
+    doctorMy: "ခေါင်းကိုက်တာ မကြာခဏဖြစ်ခြင်း၊ ပိုဆိုးလာခြင်း၊ နေ့စဉ်ဘဝကို ထိခိုက်ခြင်း သို့မဟုတ် အခြားလက္ခဏာများ တွဲဖြစ်ခြင်းရှိပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a clinician if headaches recur, worsen, affect daily activities, or occur with other symptoms."
   },
   {
-    my: "🤧 အဖျား၊ အအေးမိနှင့် အသက်ရှူလမ်းကြောင်း",
-    en: "🤧 Fever, Cold & Respiratory Health",
-    infoMy: "အဖျား၊ ချောင်းဆိုး၊ လည်ချောင်းနာနှင့် နှာစေးခြင်းဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about fever, cough, sore throat, and a runny nose."
+    icon: "🤧",
+    my: "အဖျား၊ အအေးမိနှင့် အသက်ရှူလမ်းကြောင်း",
+    en: "Fever, Cold & Respiratory Health",
+    basicMy: "အဖျား၊ ချောင်းဆိုး၊ လည်ချောင်းနာနှင့် နှာစေးခြင်းတို့သည် ကူးစက်ရောဂါများကြောင့် ဖြစ်နိုင်ပါတယ်။ အနားယူပါ၊ ရေလုံလောက်စွာသောက်ပါ။",
+    basicEn: "Fever, cough, sore throat, and a runny nose can occur with infections. Rest and drink enough fluids.",
+    preventMy: "လက်ကို ဆပ်ပြာဖြင့်ဆေးပါ၊ ချောင်းဆိုးနှာချေရာတွင် ပါးစပ်နှင့် နှာခေါင်းကို ဖုံးပါ၊ နေမကောင်းလျှင် အခြားသူများနှင့် နီးကပ်စွာနေခြင်းကို လျှော့ပါ။",
+    preventEn: "Wash your hands, cover coughs and sneezes, and reduce close contact with others when unwell.",
+    warningMy: "အသက်ရှူခက်ခြင်း၊ နှုတ်ခမ်းပြာခြင်း၊ သတိမကောင်းခြင်း သို့မဟုတ် ရင်ဘတ်ပြင်းထန်စွာနာခြင်းရှိပါက အရေးပေါ်ကုသမှု ချက်ချင်းရယူပါ။",
+    warningEn: "Seek emergency care for difficulty breathing, bluish lips, altered consciousness, or severe chest pain.",
+    doctorMy: "အဖျားမကျခြင်း၊ လက္ခဏာပိုဆိုးလာခြင်း၊ ရေမသောက်နိုင်ခြင်း သို့မဟုတ် စိုးရိမ်စရာလက္ခဏာများရှိပါက ဆေးဘက်ဆိုင်ရာအကြံဉာဏ် ရယူပါ။",
+    doctorEn: "Seek medical advice if fever persists, symptoms worsen, you cannot drink fluids, or you are concerned."
   },
   {
-    my: "🍽️ အစာအိမ်နှင့် အူလမ်းကြောင်း",
-    en: "🍽️ Digestive Health",
-    infoMy: "ဝမ်းလျှော၊ ဝမ်းချုပ်၊ ဗိုက်နာ၊ အန်ခြင်းနှင့် အစာမကြေခြင်းဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about diarrhoea, constipation, stomach pain, vomiting, and indigestion."
+    icon: "🍽️",
+    my: "အစာအိမ်နှင့် အူလမ်းကြောင်း",
+    en: "Digestive Health",
+    basicMy: "ဝမ်းလျှောခြင်း၊ ဝမ်းချုပ်ခြင်း၊ ဗိုက်နာခြင်းနှင့် အစာမကြေခြင်းတို့တွင် အကြောင်းရင်းအမျိုးမျိုး ရှိနိုင်ပါတယ်။ အစားအစာသန့်ရှင်းမှုကို ဂရုပြုပါ။",
+    basicEn: "Diarrhoea, constipation, abdominal pain, and indigestion can have different causes. Pay attention to food and water hygiene.",
+    preventMy: "သန့်ရှင်းသောရေသောက်ပါ၊ အစားအစာကို သေချာချက်ပြုတ်ပါ၊ လက်ကို ဆပ်ပြာဖြင့်ဆေးပါ။ ဝမ်းလျှောပါက ORS ကို အထုပ်ပေါ်ရှိ ညွှန်ကြားချက်အတိုင်း ဖျော်သောက်နိုင်ပါတယ်။",
+    preventEn: "Drink safe water, cook food thoroughly, and wash your hands. For diarrhoea, use ORS mixed exactly according to the packet instructions.",
+    warningMy: "ဝမ်းထဲသွေးပါခြင်း၊ ဗိုက်အလွန်ပြင်းထန်စွာနာခြင်း၊ မူးဝေပြီး လဲချင်ခြင်း သို့မဟုတ် ရေဓာတ်ခန်းခြောက်ခြင်းရှိပါက ဆေးကုသမှု ရယူပါ။",
+    warningEn: "Seek medical care for bloody stools, severe abdominal pain, faintness, or signs of dehydration.",
+    doctorMy: "ဝမ်းလျှောခြင်း သို့မဟုတ် အန်ခြင်း မသက်သာခြင်း၊ အစာရေ မဝင်နိုင်ခြင်း သို့မဟုတ် လက္ခဏာများ ပိုဆိုးလာခြင်းရှိပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a clinician if diarrhoea or vomiting persists, you cannot keep fluids down, or symptoms worsen."
   },
   {
-    my: "❤️ နာတာရှည်ရောဂါများ",
-    en: "❤️ Chronic Conditions",
-    infoMy: "သွေးတိုး၊ ဆီးချို၊ နှလုံးရောဂါနှင့် ကိုလက်စထရောအကြောင်း။ ပုံမှန်ဆေးစစ်မှုနှင့် ဆရာဝန်၏ အကြံပြုချက်ကို လိုက်နာပါ။",
-    infoEn: "Information about hypertension, diabetes, heart disease, and cholesterol. Follow your clinician's advice and regular check-ups."
+    icon: "❤️",
+    my: "နာတာရှည်ရောဂါများ",
+    en: "Chronic Conditions",
+    basicMy: "သွေးတိုးနှင့် ဆီးချိုကဲ့သို့သော ရောဂါများသည် အစောပိုင်းတွင် လက္ခဏာမပြနိုင်ပါ။ သင့်တော်သည့်အချိန်တွင် ကျန်းမာရေးစစ်ဆေးမှုခံယူပါ။",
+    basicEn: "Conditions such as high blood pressure and diabetes may have no obvious early symptoms. Get appropriate health checks.",
+    preventMy: "မျှတစွာစားပါ၊ ကိုယ်လက်လှုပ်ရှားမှုပြုလုပ်ပါ၊ ဆေးလိပ်ရှောင်ပါ၊ သွေးပေါင်ချိန်နှင့် သွေးချိုကို လိုအပ်သလို စစ်ဆေးပါ။",
+    preventEn: "Eat a balanced diet, stay physically active, avoid smoking, and check blood pressure and blood glucose when appropriate.",
+    warningMy: "ရင်ဘတ်ပြင်းထန်စွာနာခြင်း၊ အသက်ရှူခက်ခြင်း၊ ရုတ်တရက် ကိုယ်တစ်ဖက်အားနည်းခြင်း သို့မဟုတ် စကားပြောခက်ခြင်းဖြစ်ပါက အရေးပေါ်ကုသမှု ခံယူပါ။",
+    warningEn: "Severe chest pain, difficulty breathing, sudden one-sided weakness, or difficulty speaking requires emergency care.",
+    doctorMy: "ဆရာဝန်ညွှန်ကြားချက်အတိုင်း ပုံမှန်စစ်ဆေးပါ။ သောက်နေသောဆေးကို မိမိသဘောဖြင့် မရပ်ပါနှင့်။",
+    doctorEn: "Attend recommended check-ups and do not stop prescribed medication without professional advice."
   },
   {
-    my: "🤰 မိခင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
-    en: "🤰 Maternal & Reproductive Health",
-    infoMy: "ကိုယ်ဝန်ဆောင်စောင့်ရှောက်မှု၊ ရာသီလာခြင်းနှင့် သားဆက်ခြားခြင်းဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about pregnancy care, menstruation, and contraception."
+    icon: "🤰",
+    my: "မိခင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
+    en: "Maternal & Reproductive Health",
+    basicMy: "ကိုယ်ဝန်ဆောင်စောင့်ရှောက်မှု၊ ရာသီစက်ဝန်း၊ သားဆက်ခြားနည်းများနှင့် လိင်ပိုင်းဆိုင်ရာကျန်းမာရေးတို့သည် အရေးကြီးပါတယ်။",
+    basicEn: "Prenatal care, menstrual health, contraception, and sexual health are important parts of overall health.",
+    preventMy: "ကိုယ်ဝန်ဆောင်စဉ် ပုံမှန်စစ်ဆေးမှုခံယူပါ။ သားဆက်ခြားနည်းနှင့် လိင်မှတစ်ဆင့် ကူးစက်နိုင်သောရောဂါများ ကာကွယ်ရေးအကြောင်း ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။",
+    preventEn: "Attend prenatal visits and ask a healthcare professional about contraception and prevention of sexually transmitted infections.",
+    warningMy: "ကိုယ်ဝန်ဆောင်စဉ် သွေးဆင်းခြင်း၊ ပြင်းထန်သောဗိုက်နာခြင်း၊ သတိလစ်ခြင်း သို့မဟုတ် ပြင်းထန်သောခေါင်းကိုက်ခြင်းဖြစ်ပါက အရေးပေါ်စစ်ဆေးမှု ခံယူပါ။",
+    warningEn: "Bleeding during pregnancy, severe abdominal pain, fainting, or a severe headache during pregnancy requires urgent medical assessment.",
+    doctorMy: "ရာသီသွေးအလွန်များခြင်း၊ ပြင်းထန်သောနာကျင်မှု၊ ပုံမှန်မဟုတ်သော အရည်ဆင်းခြင်း သို့မဟုတ် ကိုယ်ဝန်နှင့်ပတ်သက်သော စိုးရိမ်မှုရှိပါက ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a healthcare professional for very heavy bleeding, severe pain, unusual discharge, or pregnancy concerns."
   },
   {
-    my: "🩹 အရေပြားနှင့် ဓာတ်မတည့်ခြင်း",
-    en: "🩹 Skin & Allergies",
-    infoMy: "ယားယံခြင်း၊ အဖုထွက်ခြင်းနှင့် ဓာတ်မတည့်ခြင်းဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about itching, rashes, and allergies."
+    icon: "🩹",
+    my: "အရေပြားနှင့် ဓာတ်မတည့်ခြင်း",
+    en: "Skin & Allergies",
+    basicMy: "အရေပြားယားယံခြင်းနှင့် အဖုထွက်ခြင်းသည် အကြောင်းရင်းများစွာကြောင့် ဖြစ်နိုင်ပါတယ်။ အဖုကို မကုတ်ပါနှင့်၊ အရေပြားကို သန့်ရှင်းစွာထားပါ။",
+    basicEn: "Itching and rashes can have many causes. Avoid scratching and keep the skin clean.",
+    preventMy: "ကိုယ်နှင့်မတည့်သောပစ္စည်းများကို ရှောင်ပါ။ ဆေးဝါးအသစ်သုံးပြီး တုံ့ပြန်မှုဖြစ်ပါက ကျန်းမာရေးဝန်ထမ်းကို အသိပေးပါ။",
+    preventEn: "Avoid known triggers. Tell a healthcare professional if you develop a reaction after starting a new medicine.",
+    warningMy: "နှုတ်ခမ်း၊ လျှာ သို့မဟုတ် လည်ချောင်းဖောင်းခြင်း၊ အသက်ရှူခက်ခြင်း သို့မဟုတ် မူးလဲခြင်းဖြစ်ပါက အရေးပေါ်အကူအညီ ရယူပါ။",
+    warningEn: "Swelling of the lips, tongue, or throat, difficulty breathing, or fainting may indicate a severe allergic reaction. Seek emergency help.",
+    doctorMy: "အဖုများ ပျံ့နှံ့လာခြင်း၊ နာကျင်ခြင်း၊ အဖျားတွဲဖြစ်ခြင်း သို့မဟုတ် မသက်သာခြင်းရှိပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a clinician if the rash spreads, becomes painful, occurs with fever, or does not improve."
   },
   {
-    my: "💚 စိတ်ကျန်းမာရေး",
-    en: "💚 Mental Health",
-    infoMy: "စိတ်ဖိစီးမှု၊ စိုးရိမ်ပူပန်မှုနှင့် အိပ်စက်မှုအခက်အခဲများအကြောင်း။",
-    infoEn: "General information about stress, anxiety, and sleep difficulties."
+    icon: "💚",
+    my: "စိတ်ကျန်းမာရေး",
+    en: "Mental Health",
+    basicMy: "စိတ်ဖိစီးမှုနှင့် စိုးရိမ်ပူပန်မှုများသည် လူအများတွင် ဖြစ်နိုင်ပါတယ်။ ခံစားချက်များအကြောင်း ယုံကြည်ရသူနှင့် ဆွေးနွေးခြင်းက အထောက်အကူဖြစ်နိုင်ပါတယ်။",
+    basicEn: "Stress and anxiety are common. Talking with someone you trust about your feelings may help.",
+    preventMy: "အိပ်ချိန်ပုံမှန်ထားပါ၊ လှုပ်ရှားမှုပြုလုပ်ပါ၊ အနားယူချိန်ထားပါ။ အရက်နှင့် မူးယစ်စေသောပစ္စည်းများကို ရှောင်ပါ။",
+    preventEn: "Maintain a regular sleep routine, be physically active, make time to rest, and avoid alcohol or intoxicating substances as coping tools.",
+    warningMy: "မိမိကိုယ်ကို ထိခိုက်စေမည့် အန္တရာယ်ရှိပါက တစ်ယောက်တည်းမနေဘဲ ယုံကြည်ရသူနှင့် အရေးပေါ်ကျန်းမာရေးအကူအညီကို ချက်ချင်းဆက်သွယ်ပါ။",
+    warningEn: "If you may harm yourself, do not stay alone. Contact someone you trust and seek urgent professional help.",
+    doctorMy: "စိတ်ဖိစီးမှု၊ ဝမ်းနည်းမှု သို့မဟုတ် စိုးရိမ်ပူပန်မှုက နေ့စဉ်ဘဝကို ထိခိုက်လာပါက ကျန်းမာရေးပညာရှင်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Seek professional support if stress, low mood, or anxiety starts affecting daily life."
   },
   {
-    my: "🦴 အရိုး၊ အဆစ်နှင့် ကြွက်သား",
-    en: "🦴 Bones, Joints & Muscles",
-    infoMy: "ခါးနာ၊ လည်ပင်းနာ၊ အဆစ်နာနှင့် ကြွက်သားနာခြင်းဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about back, neck, joint, and muscle pain."
+    icon: "🦴",
+    my: "အရိုး၊ အဆစ်နှင့် ကြွက်သား",
+    en: "Bones, Joints & Muscles",
+    basicMy: "အဆစ်နှင့် ကြွက်သားနာခြင်းသည် လှုပ်ရှားမှု၊ ထိခိုက်မှု သို့မဟုတ် အခြားအကြောင်းရင်းများကြောင့် ဖြစ်နိုင်ပါတယ်။ ကိုယ်နေဟန်ထားမှန်ကန်အောင် ဂရုပြုပါ။",
+    basicEn: "Joint and muscle pain may relate to activity, injury, or other causes. Pay attention to posture and safe movement.",
+    preventMy: "လှုပ်ရှားမှုကို ပုံမှန်ပြုလုပ်ပါ၊ အလေးအပင်ကို မှန်ကန်စွာမပါ၊ အချိန်ကြာကြာထိုင်ပါက ခဏခဏထ၍ လှုပ်ရှားပါ။",
+    preventEn: "Stay active, lift heavy objects safely, and take movement breaks when sitting for long periods.",
+    warningMy: "ခါးနာခြင်းနှင့်အတူ ဆီး/ဝမ်းထိန်းချုပ်မရခြင်း၊ ခြေထောက်အားနည်းခြင်း သို့မဟုတ် ပြင်းထန်သောထိခိုက်ဒဏ်ရာရှိပါက အရေးပေါ်စစ်ဆေးမှု ခံယူပါ။",
+    warningEn: "Back pain with loss of bladder or bowel control, leg weakness, or a serious injury requires urgent assessment.",
+    doctorMy: "နာကျင်မှုမသက်သာခြင်း၊ အဆစ်ဖောင်းခြင်း၊ လှုပ်ရှားမရခြင်း သို့မဟုတ် နာကျင်မှု ပိုဆိုးလာခြင်းရှိပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a clinician if pain persists or worsens, a joint swells, or movement becomes difficult."
   },
   {
-    my: "👁️ မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွား",
-    en: "👁️ Eye, Ear, Nose & Dental Health",
-    infoMy: "မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွားကျန်းမာရေးအတွက် အထွေထွေအချက်အလက်များ။",
-    infoEn: "General information about eye, ear, nose, and dental health."
+    icon: "👁️",
+    my: "မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွား",
+    en: "Eye, Ear, Nose & Dental Health",
+    basicMy: "မျက်စိ၊ နား၊ နှာခေါင်းနှင့် သွားတို့ကို သန့်ရှင်းစွာ စောင့်ရှောက်ပါ။ သွားကို တစ်နေ့နှစ်ကြိမ် ဖလိုရိုက်ပါသော သွားတိုက်ဆေးဖြင့် တိုက်ပါ။",
+    basicEn: "Maintain eye, ear, nose, and dental hygiene. Brush twice daily with fluoride toothpaste.",
+    preventMy: "နားထဲသို့ ချွန်ထက်သောပစ္စည်းမထည့်ပါနှင့်။ မျက်စိကို လက်မသန့်ဘဲ မပွတ်ပါနှင့်။ သွားကို ပုံမှန်စစ်ဆေးပါ။",
+    preventEn: "Do not insert sharp objects into the ears. Avoid rubbing eyes with unclean hands and arrange routine dental checks.",
+    warningMy: "ရုတ်တရက် အမြင်အာရုံပျောက်ခြင်း၊ မျက်စိပြင်းထန်စွာနာခြင်း သို့မဟုတ် မျက်နှာဖောင်းပြီး အသက်ရှူခက်ခြင်းဖြစ်ပါက အရေးပေါ်ကုသမှု ရယူပါ။",
+    warningEn: "Sudden vision loss, severe eye pain, or facial swelling with difficulty breathing requires urgent care.",
+    doctorMy: "သွားကိုက်ခြင်း၊ နားနာခြင်း၊ အမြင်အာရုံပြောင်းလဲခြင်း သို့မဟုတ် နာကျင်မှုမသက်သာခြင်းရှိပါက သက်ဆိုင်ရာကျန်းမာရေးပညာရှင်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult the appropriate healthcare professional for toothache, ear pain, vision changes, or persistent pain."
   },
   {
-    my: "👶 ကလေးကျန်းမာရေးနှင့် ကာကွယ်ဆေး",
-    en: "👶 Child Health & Vaccination",
-    infoMy: "ကလေးစောင့်ရှောက်မှု၊ အာဟာရနှင့် ကာကွယ်ဆေးဆိုင်ရာ အချက်အလက်များ။",
-    infoEn: "General information about child care, nutrition, and vaccination."
+    icon: "👶",
+    my: "ကလေးကျန်းမာရေးနှင့် ကာကွယ်ဆေး",
+    en: "Child Health & Vaccination",
+    basicMy: "ကလေး၏ အသက်အရွယ်အလိုက် အာဟာရ၊ ကြီးထွားမှုနှင့် ကာကွယ်ဆေးထိုးအစီအစဉ်ကို စောင့်ကြည့်ပါ။",
+    basicEn: "Monitor age-appropriate nutrition, growth, and vaccination schedules.",
+    preventMy: "ကာကွယ်ဆေးမှတ်တမ်းကို ထိန်းသိမ်းပါ၊ လက်ဆေးခြင်းကို သင်ကြားပေးပါ၊ ကလေးအတွက် သန့်ရှင်းပြီး လုံခြုံသောပတ်ဝန်းကျင် ပံ့ပိုးပါ။",
+    preventEn: "Keep vaccination records, teach handwashing, and provide a clean, safe environment.",
+    warningMy: "အသက် ၃ လအောက်ကလေးတွင် အပူချိန် ၃၈°C နှင့်အထက်ရှိခြင်း၊ အသက်ရှူခက်ခြင်း၊ တက်ခြင်း သို့မဟုတ် နို့မစို့နိုင်ခြင်းရှိပါက အမြန်ဆုံး ဆေးဘက်ဆိုင်ရာအကူအညီ ရယူပါ။",
+    warningEn: "A baby under 3 months with a temperature of 38°C or higher, difficulty breathing, seizures, or inability to feed needs urgent medical assessment.",
+    doctorMy: "ကလေး အစာမစားနိုင်ခြင်း၊ ဆီးနည်းခြင်း၊ အလွန်ငိုက်မျဉ်းခြင်း သို့မဟုတ် ကြီးထွားမှုအပေါ် စိုးရိမ်မှုရှိပါက ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a healthcare professional if a child cannot feed, urinates less, is unusually drowsy, or has growth concerns."
   },
   {
-    my: "🥗 အာဟာရ၊ ရေဓာတ်နှင့် ကိုယ်အလေးချိန်",
-    en: "🥗 Nutrition, Hydration & Weight",
-    infoMy: "အာဟာရမျှတစွာစားသုံးခြင်း၊ ရေလုံလောက်စွာသောက်ခြင်းနှင့် ကျန်းမာသော ကိုယ်အလေးချိန်အကြောင်း။",
-    infoEn: "General information about balanced nutrition, hydration, and healthy weight."
+    icon: "🥗",
+    my: "အာဟာရ၊ ရေဓာတ်နှင့် ကိုယ်အလေးချိန်",
+    en: "Nutrition, Hydration & Weight",
+    basicMy: "အာဟာရမျှတစေရန် ဟင်းသီးဟင်းရွက်၊ သစ်သီး၊ ပရိုတင်းနှင့် အခြားအာဟာရအုပ်စုများကို မျှတစွာစားပါ။",
+    basicEn: "Aim for a balanced diet with vegetables, fruit, protein sources, and a variety of foods.",
+    preventMy: "ရေကို ပုံမှန်သောက်ပါ၊ သကြားများသောအချိုရည်များကို လျှော့ပါ၊ အစားအစာအုပ်စုစုံကို မျှတစွာစားပါ။",
+    preventEn: "Drink water regularly, limit sugary drinks, and eat a variety of foods in balanced portions.",
+    warningMy: "ရေဓာတ်ခန်းခြောက်ပြီး မူးလဲခြင်း၊ သတိမကောင်းခြင်း သို့မဟုတ် အစာရေမဝင်နိုင်ခြင်းဖြစ်ပါက ဆေးကုသမှု ရယူပါ။",
+    warningEn: "Seek medical care for dehydration with fainting, altered consciousness, or inability to keep fluids down.",
+    doctorMy: "ကိုယ်အလေးချိန် အကြောင်းမဲ့လျင်မြန်စွာ ပြောင်းလဲခြင်း သို့မဟုတ် အစားအသောက်ကြောင့် ကျန်းမာရေးပြဿနာရှိခြင်းကို စိုးရိမ်ပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    doctorEn: "Consult a clinician about rapid unexplained weight changes or health problems related to eating."
   },
   {
-    my: "🚻 ဆီးလမ်းကြောင်းဆိုင်ရာ",
-    en: "🚻 Urinary Health",
-    infoMy: "ဆီးကျင်ခြင်း၊ ဆီးခဏခဏသွားခြင်းနှင့် ဆီးလမ်းကြောင်းဆိုင်ရာ လက္ခဏာများ။",
-    infoEn: "General information about painful or frequent urination and urinary symptoms."
+    icon: "🚻",
+    my: "ဆီးလမ်းကြောင်းဆိုင်ရာ",
+    en: "Urinary Health",
+    basicMy: "ဆီးကျင်ခြင်း၊ ဆီးခဏခဏသွားခြင်းနှင့် ဆီးအရောင်ပြောင်းခြင်းတို့တွင် အကြောင်းရင်းအမျိုးမျိုး ရှိနိုင်ပါတယ်။",
+    basicEn: "Painful or frequent urination and changes in urine can have several causes.",
+    preventMy: "ရေသောက်ရန် သင့်တော်သောအလေ့အကျင့်ထားပါ။ ဆီးသွားချင်စိတ်ကို အချိန်ကြာကြာ မအောင့်ထားပါနှင့်။",
+    preventEn: "Maintain appropriate hydration and avoid routinely holding urine for long periods.",
+    warningMy: "အဖျားနှင့် ချမ်းတုန်ခြင်း၊ ခါးဘေးနာခြင်း၊ အန်ခြင်း၊ ဆီးထဲသွေးပါခြင်း သို့မဟုတ် ဆီးလုံးဝမသွားနိုင်ခြင်းရှိပါက အမြန်စစ်ဆေးမှုခံယူပါ။",
+    warningEn: "Seek prompt care for fever with chills, flank pain, vomiting, blood in urine, or inability to urinate.",
+    doctorMy: "ဆီးကျင်ခြင်း၊ ဆီးခဏခဏသွားခြင်း သို့မဟုတ် လက္ခဏာပြန်ဖြစ်ခြင်းရှိပါက ဆေးဘက်ဆိုင်ရာအကြံဉာဏ် ရယူပါ။",
+    doctorEn: "Seek medical advice for painful or frequent urination or recurring symptoms."
   },
   {
-    my: "🚑 ထိခိုက်ဒဏ်ရာနှင့် အရေးပေါ်အခြေအနေ",
-    en: "🚑 Injuries & Emergencies",
-    infoMy: "ထိခိုက်ဒဏ်ရာ သို့မဟုတ် အရေးပေါ်လက္ခဏာများရှိပါက ချက်ချင်းဆေးကုသမှုရယူပါ။",
-    infoEn: "For serious injuries or emergency warning signs, seek urgent medical care."
+    icon: "🚑",
+    my: "ထိခိုက်ဒဏ်ရာနှင့် အရေးပေါ်အခြေအနေ",
+    en: "Injuries & Emergencies",
+    basicMy: "အရေးပေါ်အခြေအနေတွင် မိမိနှင့် အခြားသူများ၏ လုံခြုံရေးကို ဦးစားပေးပါ။ ဒေသဆိုင်ရာ အရေးပေါ်အကူအညီကို မည်သို့ခေါ်ရမည်ကို ကြိုသိထားပါ။",
+    basicEn: "In an emergency, prioritise everyone's safety and know how to contact local emergency services.",
+    preventMy: "ဆေးဝါးနှင့် ဓာတုပစ္စည်းများကို ကလေးလက်မလှမ်းမီနေရာတွင်ထားပါ။ လုံခြုံရေးပစ္စည်းများကို အသုံးပြုပါ။",
+    preventEn: "Keep medicines and chemicals away from children and use appropriate safety equipment.",
+    warningMy: "အသက်ရှူမဝခြင်း၊ သတိလစ်ခြင်း၊ သွေးထွက်မတိတ်ခြင်း၊ ပြင်းထန်သောမီးလောင်ဒဏ်ရာ သို့မဟုတ် ရင်ဘတ်ပြင်းထန်စွာနာခြင်းရှိပါက အရေးပေါ်အကူအညီ ချက်ချင်းခေါ်ပါ။",
+    warningEn: "Call emergency services for difficulty breathing, unconsciousness, uncontrolled bleeding, serious burns, or severe chest pain.",
+    doctorMy: "ပြင်းထန်သောထိခိုက်ဒဏ်ရာ၊ ဦးခေါင်းထိခိုက်မှု၊ အရိုးကျိုးနိုင်သည့်လက္ခဏာ သို့မဟုတ် အဆိပ်မိနိုင်မှုရှိပါက ဆေးကုသမှု ရယူပါ။",
+    doctorEn: "Seek medical care for serious injuries, head injuries, suspected fractures, or possible poisoning."
   }
 ];
 
-const text = {
+const ui = {
   my: {
-    welcome: "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။ 💚\n\nကျန်းမာရေးအချက်အလက်များ ကြည့်ရှုရန် သို့မဟုတ် လက္ခဏာများကို အဆင့်လိုက် ပြောပြရန် အောက်ပါ Menu ကို ရွေးချယ်ပါ။",
+    welcome: "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။ 💚\n\nအောက်ပါ Menu ကို ရွေးချယ်ပါ။",
     health: "📚 ကျန်းမာရေးအချက်အလက်",
     symptoms: "🤒 လက္ခဏာစစ်ဆေးရန်",
     contact: "📞 7887 ဆက်သွယ်ရန်",
     language: "🌐 English",
     back: "🏠 ပင်မ Menu",
-    chooseHealth: "ကျန်းမာရေးအမျိုးအစားကို ရွေးချယ်ပါ။",
+    choose: "ကျန်းမာရေးအမျိုးအစားကို ရွေးချယ်ပါ။",
+    basic: "📖 အခြေခံသိထားသင့်သည်",
+    prevent: "🛡️ ကြိုတင်ကာကွယ်နည်း",
+    warning: "⚠️ သတိထားရမည့် လက္ခဏာများ",
+    doctor: "👩‍⚕️ ဘယ်အချိန်မှာ ဆရာဝန်နှင့် တိုင်ပင်သင့်လဲ",
     symptomAsk: "ဘယ်လိုလက္ခဏာ ခံစားနေရပါသလဲ။ ဥပမာ - ခေါင်းကိုက်၊ အဖျားတက်၊ ဝမ်းလျှော။",
-    redFlagAsk: "အသက်ရှူမဝခြင်း၊ ရင်ဘတ်အောင့်ခြင်း၊ သတိလစ်ခြင်း၊ ရုတ်တရက် စကားမပြောနိုင်ခြင်း သို့မဟုတ် ကိုယ်တစ်ဖက်အားနည်းခြင်းလို အရေးပေါ်လက္ခဏာ ရှိပါသလား။",
+    redFlag: "အခု အသက်ရှူမဝခြင်း၊ ရင်ဘတ်ပြင်းထန်စွာနာခြင်း၊ သတိလစ်ခြင်း၊ ရုတ်တရက် စကားပြောခက်ခြင်း သို့မဟုတ် ကိုယ်တစ်ဖက်အားနည်းခြင်း ရှိပါသလား။",
     yes: "ရှိပါတယ်",
     no: "မရှိပါ",
     duration: "ဒီလက္ခဏာ ဘယ်လောက်ကြာပြီလဲ။ ဥပမာ - ဒီနေ့မှ၊ ၂ ရက်၊ ၁ ပတ်။",
@@ -117,25 +212,26 @@ const text = {
     mild: "အနည်းငယ်",
     moderate: "အလယ်အလတ်",
     severe: "ပြင်းထန်",
-    summary: "အချက်အလက်ပေးတဲ့အတွက် ကျေးဇူးတင်ပါတယ်။ ဒီအချက်အလက်တွေက ရောဂါအတည်ပြုချက် မဟုတ်ပါဘူး။ လက္ခဏာမသက်သာခြင်း၊ ပိုဆိုးလာခြင်း သို့မဟုတ် စိုးရိမ်စရာရှိပါက ဆရာဝန်နဲ့ တိုင်ပင်ပါ။",
     emergency: "🚨 အရေးပေါ်သတိပေးချက်\n\nသင်ဖော်ပြထားသော လက္ခဏာသည် အရေးပေါ်အခြေအနေ ဖြစ်နိုင်ပါတယ်။ Bot နဲ့ ဆက်လက်မေးခွန်းဖြေဆိုခြင်းကို ရပ်ပြီး အနီးဆုံး အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။ လုံခြုံစွာ သွားလာနိုင်ခြင်းမရှိပါက ဒေသဆိုင်ရာ အရေးပေါ်အကူအညီကို ခေါ်ပါ။",
-    emergencyYes: "အရေးပေါ်လက္ခဏာရှိကြောင်း ပြောပြထားတဲ့အတွက် ပုံမှန်မေးခွန်းများကို ရပ်လိုက်ပါတယ်။ ချက်ချင်းဆေးကုသမှု ရယူပါ။",
-    contactInfo: "📞 7887 Healthcare Call Center\n\n7887 ကို ဖုန်းခေါ်ဆိုပြီး ကျန်းမာရေးအကြံဉာဏ်ရယူရန် ကြိုးစားနိုင်ပါတယ်။ ဖုန်းခေါ်ဆိုခနှင့် ဝန်ဆောင်မှုရရှိနိုင်မှုသည် သင့်ဖုန်းလိုင်းနှင့် လက်ရှိဝန်ဆောင်မှုအခြေအနေပေါ် မူတည်နိုင်ပါတယ်။ အရေးပေါ်အခြေအနေတွင် 7887 အဖြေကို စောင့်မနေဘဲ အရေးပေါ်ဆေးကုသမှု ရယူပါ။",
-    healthDisclaimer: "\n\n⚠️ အထွေထွေကျန်းမာရေးအချက်အလက်သာ ဖြစ်ပါတယ်။ ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မဟုတ်ပါ။",
-    fallback: "မေးမြန်းချက်ကို နားလည်ရန် ခက်ခဲနေပါတယ်။ အောက်ပါ Menu ကို ရွေးချယ်ပါ။",
-    mainMenu: "ပင်မ Menu ကို ပြန်ရောက်ပါပြီ။",
-    topicPrefix: "📚 ကျန်းမာရေးအချက်အလက်\n\n"
+    result: "📝 သင်ဖြေထားသော အချက်အလက်များ\n\nလက္ခဏာ: {symptom}\nကြာချိန်: {duration}\nပြင်းထန်မှု: {severity}\n\nဤအချက်အလက်သည် ရောဂါအတည်ပြုချက် မဟုတ်ပါ။ လက္ခဏာမသက်သာခြင်း သို့မဟုတ် ပိုဆိုးလာခြင်းရှိပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
+    contactInfo: "📞 7887 Healthcare Call Center\n\n7887 ကို ဖုန်းခေါ်ဆိုပြီး ကျန်းမာရေးအကြံဉာဏ် ရယူနိုင်မှုကို စမ်းသပ်နိုင်ပါတယ်။ ဖုန်းခေါ်ဆိုခနှင့် ဝန်ဆောင်မှုရရှိနိုင်မှုသည် သင့်ဖုန်းလိုင်းနှင့် လက်ရှိဝန်ဆောင်မှုအခြေအနေပေါ် မူတည်နိုင်ပါတယ်။ အရေးပေါ်အခြေအနေတွင် 7887 အဖြေကို စောင့်မနေဘဲ အရေးပေါ်ဆေးကုသမှု ရယူပါ။",
+    disclaimer: "\n\n⚠️ အထွေထွေကျန်းမာရေးအချက်အလက်သာ ဖြစ်ပါတယ်။ ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မဟုတ်ပါ။",
+    fallback: "အောက်ပါ Menu မှ ရွေးချယ်ပေးပါ။"
   },
   en: {
-    welcome: "Welcome to Htoo Care. 💚\n\nChoose an option below for health information or guided symptom intake.",
+    welcome: "Welcome to Htoo Care. 💚\n\nPlease choose an option below.",
     health: "📚 Health Information",
     symptoms: "🤒 Check Symptoms",
     contact: "📞 Contact 7887",
     language: "🌐 မြန်မာဘာသာ",
     back: "🏠 Main Menu",
-    chooseHealth: "Choose a health category.",
+    choose: "Choose a health category.",
+    basic: "📖 Essential Facts",
+    prevent: "🛡️ Prevention",
+    warning: "⚠️ Warning Signs",
+    doctor: "👩‍⚕️ When to See a Clinician",
     symptomAsk: "What symptom are you experiencing? For example: headache, fever, or diarrhoea.",
-    redFlagAsk: "Do you have any emergency warning signs, such as difficulty breathing, chest pain, loss of consciousness, sudden difficulty speaking, or sudden weakness on one side?",
+    redFlag: "Are you experiencing difficulty breathing, severe chest pain, loss of consciousness, sudden difficulty speaking, or sudden weakness on one side?",
     yes: "Yes",
     no: "No",
     duration: "How long have you had this symptom? For example: today, 2 days, or 1 week.",
@@ -143,50 +239,65 @@ const text = {
     mild: "Mild",
     moderate: "Moderate",
     severe: "Severe",
-    summary: "Thank you for sharing. This is not a diagnosis. Consult a healthcare professional if symptoms persist, worsen, or concern you.",
     emergency: "🚨 EMERGENCY WARNING\n\nYour symptoms may indicate an emergency. Stop this chat assessment and seek urgent medical care now. If you cannot travel safely, contact local emergency services.",
-    emergencyYes: "You reported an emergency warning sign. The routine questions have stopped. Please seek urgent medical care now.",
-    contactInfo: "📞 7887 Healthcare Call Center\n\nYou may try calling 7887 for health guidance. Call charges and availability may depend on your phone network and current service arrangements. For an emergency, do not wait for a 7887 response; seek urgent medical care.",
-    healthDisclaimer: "\n\n⚠️ General health information only. This is not a diagnosis or prescription.",
-    fallback: "Sorry, I didn't understand. Please choose an option from the menu.",
-    mainMenu: "You are back at the main menu.",
-    topicPrefix: "📚 Health Information\n\n"
+    result: "📝 Your responses\n\nSymptom: {symptom}\nDuration: {duration}\nSeverity: {severity}\n\nThis is not a diagnosis. Consult a clinician if symptoms persist or worsen.",
+    contactInfo: "📞 7887 Healthcare Call Center\n\nYou may try calling 7887 for health guidance. Charges and availability may depend on your network and current service arrangements. In an emergency, do not wait for a 7887 response; seek urgent medical care.",
+    disclaimer: "\n\n⚠️ General health information only. This is not a diagnosis or prescription.",
+    fallback: "Please choose an option from the menu."
   }
 };
 
-function getLang(id) {
+function langOf(id) {
   return languages.get(id) || "my";
 }
 
-function tr(id) {
-  return text[getLang(id)];
+function t(id) {
+  return ui[langOf(id)];
 }
 
 function mainKeyboard(id) {
-  const t = tr(id);
+  const x = t(id);
   return {
     keyboard: [
-      [t.health],
-      [t.symptoms],
-      [t.contact, t.language]
+      [x.health],
+      [x.symptoms],
+      [x.contact, x.language]
     ],
     resize_keyboard: true
   };
 }
 
-function topicKeyboard(id) {
-  const lang = getLang(id);
+function healthKeyboard(id) {
+  const lang = langOf(id);
   const rows = [];
+
   for (let i = 0; i < categories.length; i += 2) {
-    rows.push(categories.slice(i, i + 2).map(c => c[lang]));
+    rows.push(
+      categories.slice(i, i + 2).map(c => `${c.icon} ${c[lang]}`)
+    );
   }
-  rows.push([tr(id).back]);
+
+  rows.push([t(id).back]);
   return { keyboard: rows, resize_keyboard: true };
 }
 
-function choiceKeyboard(id, options) {
+function detailKeyboard(id) {
+  const x = t(id);
   return {
-    keyboard: options.map(option => [option]),
+    keyboard: [
+      [x.basic],
+      [x.prevent],
+      [x.warning],
+      [x.doctor],
+      [x.back]
+    ],
+    resize_keyboard: true
+  };
+}
+
+function choices(id, options) {
+  return {
+    keyboard: options.map(v => [v]),
     resize_keyboard: true,
     one_time_keyboard: true
   };
@@ -197,50 +308,53 @@ function send(id, message, keyboard = mainKeyboard(id)) {
 }
 
 function isYes(value, lang) {
-  const s = value.trim().toLowerCase();
+  const v = value.trim().toLowerCase();
   return lang === "my"
-    ? ["ရှိပါတယ်", "ရှိ", "ဟုတ်", "ဟုတ်ကဲ့", "ရှိတယ်"].includes(s)
-    : ["yes", "y", "yes please"].includes(s);
+    ? ["ရှိပါတယ်", "ရှိ", "ဟုတ်", "ဟုတ်ကဲ့", "ရှိတယ်"].includes(v)
+    : ["yes", "y"].includes(v);
 }
 
 function isNo(value, lang) {
-  const s = value.trim().toLowerCase();
+  const v = value.trim().toLowerCase();
   return lang === "my"
-    ? ["မရှိပါ", "မရှိ", "မရှိဘူး", "မရှိပါဘူး", "မဟုတ်"].includes(s)
-    : ["no", "n", "nope"].includes(s);
+    ? ["မရှိပါ", "မရှိ", "မရှိဘူး", "မရှိပါဘူး"].includes(v)
+    : ["no", "n"].includes(v);
 }
 
-function emergencyDetected(value) {
-  const s = value.toLowerCase();
-
+function hasEmergencyWords(value) {
+  const v = value.toLowerCase();
   const patterns = [
     /အသက်ရှူမဝ|အသက်ရှူမရ|အသက်ရှူခက်|အသက်ရှူကြပ်/,
-    /ရင်ဘတ်အောင့်|ရင်ဘတ်အရမ်းနာ|ရင်ဘတ်နာ/,
+    /ရင်ဘတ်အလွန်နာ|ရင်ဘတ်ပြင်းထန်စွာနာ/,
     /သတိလစ်|သတိမရ|မေ့လဲ/,
-    /သွေးအများကြီးထွက်|သွေးမတိတ်/,
-    /တက်နေ|တက်ခြင်း|တက်သွား/,
-    /စကားမပြောနိုင်|စကားပြောမရ|ကိုယ်တစ်ဖက်အားနည်း|မျက်နှာရွဲ့/,
-    /လည်ချောင်းပိတ်|လျှာဖောင်း|မျက်နှာဖောင်း/,
-    /suicidal|kill myself|want to die|can't breathe|cannot breathe|difficulty breathing|shortness of breath|chest pain|unconscious|passed out|severe bleeding|face drooping|one-sided weakness|throat closing|tongue swelling/
+    /သွေးမတိတ်|သွေးအများကြီးထွက်/,
+    /တက်နေ|တက်ခြင်း/,
+    /စကားပြောခက်|စကားမပြောနိုင်|ကိုယ်တစ်ဖက်အားနည်း|မျက်နှာရွဲ့/,
+    /နှုတ်ခမ်းဖောင်း|လျှာဖောင်း|လည်ချောင်းဖောင်း/,
+    /can't breathe|cannot breathe|difficulty breathing|shortness of breath/,
+    /severe chest pain|unconscious|passed out|uncontrolled bleeding/,
+    /face drooping|one-sided weakness|throat swelling|tongue swelling/
   ];
 
-  return patterns.some(pattern => pattern.test(s));
+  return patterns.some(pattern => pattern.test(v));
 }
 
-function detectCategory(value, lang) {
+function findCategory(input, lang) {
+  const normalized = input.trim();
   return categories.findIndex(c =>
-    value.trim() === c[lang] ||
-    value.trim() === c.my ||
-    value.trim() === c.en
+    normalized === `${c.icon} ${c[lang]}` ||
+    normalized === c[lang] ||
+    normalized === `${c.icon} ${c.my}` ||
+    normalized === c.my ||
+    normalized === `${c.icon} ${c.en}` ||
+    normalized === c.en
   );
 }
 
-function startSymptoms(id) {
-  sessions.set(id, { flow: "symptom", step: "symptom" });
-  return send(id, tr(id).symptomAsk, {
-    keyboard: [[tr(id).back]],
-    resize_keyboard: true
-  });
+function categoryDetail(category, lang, key) {
+  const suffix = lang === "my" ? "My" : "En";
+  const content = category[key + suffix];
+  return `${category.icon} ${category[lang]}\n\n${content}${t(0).disclaimer || ""}`;
 }
 
 async function handleMessage(msg) {
@@ -248,16 +362,14 @@ async function handleMessage(msg) {
 
   const id = String(msg.chat.id);
   const input = msg.text.trim();
-  const lang = getLang(id);
-  const t = tr(id);
 
   if (input === "/start" || input === "/menu") {
     sessions.delete(id);
-    return send(id, t.welcome);
+    return send(id, t(id).welcome);
   }
 
   if (input === "/language") {
-    return send(id, "Choose your language / ဘာသာစကားရွေးချယ်ပါ။", {
+    return send(id, "Choose language / ဘာသာစကားရွေးချယ်ပါ။", {
       keyboard: [["မြန်မာဘာသာ", "English"]],
       resize_keyboard: true
     });
@@ -266,109 +378,128 @@ async function handleMessage(msg) {
   if (input === "English" || input === "🌐 English") {
     languages.set(id, "en");
     sessions.delete(id);
-    return send(id, text.en.welcome, mainKeyboard(id));
+    return send(id, ui.en.welcome);
   }
 
   if (input === "မြန်မာဘာသာ" || input === "🌐 မြန်မာဘာသာ") {
     languages.set(id, "my");
     sessions.delete(id);
-    return send(id, text.my.welcome, mainKeyboard(id));
+    return send(id, ui.my.welcome);
   }
 
-  if (input === t.back || input === "🏠 Main Menu" || input === "🏠 ပင်မ Menu") {
+  const lang = langOf(id);
+  const x = t(id);
+
+  if (input === x.back || input === "🏠 ပင်မ Menu" || input === "🏠 Main Menu") {
     sessions.delete(id);
-    return send(id, t.mainMenu, mainKeyboard(id));
+    return send(id, x.welcome);
   }
 
-  // Check emergency signs before continuing routine symptom questions.
-  // Yes/no answers are handled by the current guided question below.
   const session = sessions.get(id);
-  const isExpectedYesNo = session &&
-    ["redflags"].includes(session.step) &&
-    (isYes(input, lang) || isNo(input, lang));
 
-  if (!isExpectedYesNo && emergencyDetected(input)) {
+  // Check urgent symptoms before normal symptom questions.
+  if (hasEmergencyWords(input)) {
     sessions.delete(id);
-    return send(id, t.emergency, mainKeyboard(id));
+    return send(id, x.emergency);
   }
 
-  if (input === t.health) {
-    sessions.set(id, { flow: "health", step: "topic" });
-    return send(id, t.chooseHealth, topicKeyboard(id));
+  if (input === x.health) {
+    sessions.set(id, { flow: "health", step: "category" });
+    return send(id, x.choose, healthKeyboard(id));
   }
 
-  if (input === t.symptoms) {
-    return startSymptoms(id);
+  if (input === x.symptoms) {
+    sessions.set(id, { flow: "symptoms", step: "symptom" });
+    return send(id, x.symptomAsk, { keyboard: [[x.back]], resize_keyboard: true });
   }
 
-  if (input === t.contact) {
+  if (input === x.contact) {
     sessions.delete(id);
-    return send(id, t.contactInfo, mainKeyboard(id));
+    return send(id, x.contactInfo);
   }
 
-  const categoryIndex = detectCategory(input, lang);
+  const categoryIndex = findCategory(input, lang);
   if (categoryIndex !== -1) {
-    const category = categories[categoryIndex];
-    sessions.delete(id);
-    const info = category[lang === "my" ? "infoMy" : "infoEn"];
-    return send(id, t.topicPrefix + category[lang] + "\n\n" + info + t.healthDisclaimer, mainKeyboard(id));
+    sessions.set(id, { flow: "health", step: "detail", categoryIndex });
+    return send(id, `📚 ${categories[categoryIndex][lang]}\n\n${x.choose}`, detailKeyboard(id));
   }
 
-  if (session && session.flow === "symptom") {
-    if (session.step === "symptom") {
-      session.symptom = input;
-      session.step = "redflags";
-      sessions.set(id, session);
-      return send(id, t.redFlagAsk, choiceKeyboard(id, [t.yes, t.no]));
+  if (session && session.flow === "health" && session.step === "detail") {
+    const category = categories[session.categoryIndex];
+
+    const options = [
+      [x.basic, "basic"],
+      [x.prevent, "prevent"],
+      [x.warning, "warning"],
+      [x.doctor, "doctor"]
+    ];
+
+    const selected = options.find(([label]) => label === input);
+
+    if (selected) {
+      const suffix = lang === "my" ? "My" : "En";
+      const content = category[selected[1] + suffix];
+      const disclaimer = lang === "my"
+        ? "\n\n⚠️ အထွေထွေကျန်းမာရေးအချက်အလက်သာ ဖြစ်ပါတယ်။ ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မဟုတ်ပါ။"
+        : "\n\n⚠️ General health information only. This is not a diagnosis or prescription.";
+
+      return send(
+        id,
+        `${category.icon} ${category[lang]}\n\n${content}${disclaimer}`,
+        detailKeyboard(id)
+      );
     }
 
-    if (session.step === "redflags") {
+    return send(id, x.choose, detailKeyboard(id));
+  }
+
+  if (session && session.flow === "symptoms") {
+    if (session.step === "symptom") {
+      session.symptom = input;
+      session.step = "redFlag";
+      sessions.set(id, session);
+      return send(id, x.redFlag, choices(id, [x.yes, x.no]));
+    }
+
+    if (session.step === "redFlag") {
       if (isYes(input, lang)) {
         sessions.delete(id);
-        return send(id, t.emergencyYes, mainKeyboard(id));
+        return send(id, x.emergency);
       }
 
       if (isNo(input, lang)) {
         session.step = "duration";
         sessions.set(id, session);
-        return send(id, t.duration, {
-          keyboard: [[t.back]],
-          resize_keyboard: true
-        });
+        return send(id, x.duration, { keyboard: [[x.back]], resize_keyboard: true });
       }
 
-      return send(id, t.redFlagAsk, choiceKeyboard(id, [t.yes, t.no]));
+      return send(id, x.redFlag, choices(id, [x.yes, x.no]));
     }
 
     if (session.step === "duration") {
       session.duration = input;
       session.step = "severity";
       sessions.set(id, session);
-      return send(id, t.severity, choiceKeyboard(id, [t.mild, t.moderate, t.severe]));
+      return send(id, x.severity, choices(id, [x.mild, x.moderate, x.severe]));
     }
 
     if (session.step === "severity") {
-      session.severity = input;
+      const result = x.result
+        .replace("{symptom}", session.symptom)
+        .replace("{duration}", session.duration)
+        .replace("{severity}", input);
+
       sessions.delete(id);
-
-      const summary = lang === "my"
-        ? `📝 သင့်အဖြေများ\n\n• လက္ခဏာ: ${session.symptom}\n• ဖြစ်ပွားချိန်: ${session.duration}\n• ပြင်းထန်မှု: ${input}\n\n${t.summary}`
-        : `📝 Your responses\n\n• Symptom: ${session.symptom}\n• Duration: ${session.duration}\n• Severity: ${input}\n\n${t.summary}`;
-
-      return send(id, summary, mainKeyboard(id));
+      return send(id, result);
     }
   }
 
-  if (session && session.flow === "health" && session.step === "topic") {
-    return send(id, t.chooseHealth, topicKeyboard(id));
-  }
-
-  return send(id, t.fallback, mainKeyboard(id));
+  return send(id, x.fallback);
 }
 
-bot.on("message", (msg) => {
+bot.on("message", msg => {
   handleMessage(msg).catch(err => {
-    console.error("Message handling error:", err.message);
+    console.error("Telegram message error:", err.message);
   });
 });
 
@@ -388,7 +519,7 @@ app.post(webhookPath, (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
-  console.log(`Htoo Care server listening on port ${PORT}`);
+  console.log(`Htoo Care listening on port ${PORT}`);
 
   try {
     await bot.setWebHook(`${BASE_URL}${webhookPath}`);
