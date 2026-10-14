@@ -1,4 +1,123 @@
 
+const profileSession = sessions.get(chatId);
+
+if (
+  profileSession &&
+  profileSession.flow === "profile"
+) {
+  // Step 1: Ask age
+  if (profileSession.step === "age") {
+    const age = Number(input.trim());
+
+    if (
+      input.trim() === "" ||
+      !/^\d{1,3}$/.test(input.trim()) ||
+      !Number.isInteger(age) ||
+      age < 0 ||
+      age > 120
+    ) {
+      await bot.sendMessage(
+        chatId,
+        profileText(
+          chatId,
+          "အသက်ကို 0 မှ 120 အတွင်း ဂဏန်းဖြင့် ရိုက်ထည့်ပေးပါ။ ဥပမာ - 25",
+          "Please enter an age from 0 to 120. Example: 25"
+        )
+      );
+      return;
+    }
+
+    profileSession.age = age;
+    profileSession.step = "gender";
+    sessions.set(chatId, profileSession);
+
+    await bot.sendMessage(
+      chatId,
+      profileText(
+        chatId,
+        "ကျေးဇူးတင်ပါတယ်။ 🙏\n\nသင့်လိင်ကို ရွေးချယ်ပေးပါ။",
+        "Thank you! 🙏\n\nPlease select your gender."
+      ),
+      {
+        reply_markup: {
+          keyboard: [
+            [
+              { text: "အမျိုးသား (Male)" },
+              { text: "အမျိုးသမီး (Female)" }
+            ],
+            [
+              { text: "မဖြေလိုပါ (Prefer not to say)" }
+            ]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      }
+    );
+
+    return;
+  }
+
+  // Step 2: Save gender in the current session
+  if (profileSession.step === "gender") {
+    let gender = null;
+
+    if (
+      input === "အမျိုးသား (Male)" ||
+      input === "Male" ||
+      input === "အမျိုးသား"
+    ) {
+      gender = "Male";
+    } else if (
+      input === "အမျိုးသမီး (Female)" ||
+      input === "Female" ||
+      input === "အမျိုးသမီး"
+    ) {
+      gender = "Female";
+    } else if (
+      input === "မဖြေလိုပါ (Prefer not to say)" ||
+      input === "Prefer not to say" ||
+      input === "မဖြေလိုပါ"
+    ) {
+      gender = "Prefer not to say";
+    }
+
+    if (!gender) {
+      await bot.sendMessage(
+        chatId,
+        profileText(
+          chatId,
+          "အောက်ပါရွေးချယ်စရာများထဲမှ တစ်ခုကို နှိပ်ပေးပါ။",
+          "Please select one of the options shown below."
+        )
+      );
+      return;
+    }
+
+    // Keep profile only in the existing in-memory session.
+    profileSession.gender = gender;
+    profileSession.flow = "menu";
+    profileSession.step = null;
+
+    sessions.set(chatId, profileSession);
+
+    await bot.sendMessage(
+      chatId,
+      profileText(
+        chatId,
+        "ကျေးဇူးတင်ပါတယ်။ 💚\n\nHtoo Care မှ ကြိုဆိုပါတယ်။ ကျန်းမာရေးအချက်အလက်များကို ရွေးချယ်နိုင်ပါပြီ။",
+        "Thank you! 💚\n\nWelcome to Htoo Care. You can now explore health information."
+      ),
+      { reply_markup: { remove_keyboard: true } }
+    );
+
+    // IMPORTANT:
+    // Call your EXISTING main-menu function here.
+    // Example only: await showMainMenu(chatId);
+    return;
+  }
+}
+
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 
