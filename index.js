@@ -1,10 +1,147 @@
 
-const profileSession = sessions.get(chatId);
+const languages = new Map();
+const sessions = new Map();
+const languages = new Map();
+const sessions = new Map();
+
+// In-memory only; no database or long-term storage.
+const profiles = new Map();
+if (input === "/start" || input === "/menu") {
+  sessions.delete(id);
+  return send(id, t(id).welcome);
+}
+if (input === "/start") {
+  sessions.set(id, {
+    flow: "profile",
+    step: "age"
+  });
+
+  return send(
+    id,
+    langOf(id) === "en"
+      ? "Hello! 👋 Welcome to Htoo Care. 💚\n\n" +
+        "To help us tailor health information, how old are you? " +
+        "Please enter your age in years. Example: 25"
+      : "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။ 💚\n\n" +
+        "သင့်ကျန်းမာရေးအတွက် ကူညီပေးနိုင်ရန် သင့်အသက် ဘယ်လောက်ရှိပါသလဲ။\n" +
+        "အသက်ကို နှစ်ဖြင့် ရိုက်ထည့်ပေးပါ။ ဥပမာ - 25",
+    { remove_keyboard: true }
+  );
+}
+
+if (input === "/menu") {
+  sessions.delete(id);
+  return send(id, t(id).welcome);
+}
+const session = sessions.get(id);
+
+// Check urgent symptoms before normal symptom questions.
+if (hasEmergencyWords(input)) {
+  sessions.delete(id);
+  return send(id, x.emergency);
+}
+  // Registration flow: age -> gender -> existing main menu.
+  const profileSession = sessions.get(id);
+
+  if (profileSession?.flow === "profile") {
+    if (profileSession.step === "age") {
+      const ageText = input.trim();
+      const age = Number(ageText);
+
+      if (
+        !/^\d{1,3}$/.test(ageText) ||
+        !Number.isInteger(age) ||
+        age < 1 ||
+        age > 120
+      ) {
+        return send(
+          id,
+          lang === "en"
+            ? "Please enter a valid age from 1 to 120. Example: 25"
+            : "အသက်ကို 1 မှ 120 အတွင်း ဂဏန်းဖြင့် ရိုက်ထည့်ပေးပါ။ ဥပမာ - 25",
+          { keyboard: [[x.back]], resize_keyboard: true }
+        );
+      }
+
+      profileSession.age = age;
+      profileSession.step = "gender";
+      sessions.set(id, profileSession);
+
+      return send(
+        id,
+        lang === "en"
+          ? "Thank you! 🙏\n\nPlease select your gender, or choose not to say."
+          : "ကျေးဇူးတင်ပါတယ်။ 🙏\n\nသင့်လိင်ကို ရွေးချယ်ပေးပါ။ မဖြေလိုပါကလည်း ရွေးချယ်နိုင်ပါတယ်။",
+        {
+          keyboard: [
+            ["အမျိုးသား (Male)", "အမျိုးသမီး (Female)"],
+            ["မဖြေလိုပါ (Prefer not to say)"]
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      );
+    }
+
+    if (profileSession.step === "gender") {
+      let gender;
+
+      if (
+        ["အမျိုးသား (Male)", "အမျိုးသား", "Male"].includes(input)
+      ) {
+        gender = "Male";
+      } else if (
+        ["အမျိုးသမီး (Female)", "အမျိုးသမီး", "Female"].includes(input)
+      ) {
+        gender = "Female";
+      } else if (
+        [
+          "မဖြေလိုပါ (Prefer not to say)",
+          "မဖြေလိုပါ",
+          "Prefer not to say"
+        ].includes(input)
+      ) {
+        gender = "Prefer not to say";
+      }
+
+      if (!gender) {
+        return send(
+          id,
+          lang === "en"
+            ? "Please choose Male, Female, or Prefer not to say."
+            : "အမျိုးသား၊ အမျိုးသမီး သို့မဟုတ် မဖြေလိုပါ ကို ရွေးချယ်ပေးပါ။",
+          {
+            keyboard: [
+              ["အမျိုးသား (Male)", "အမျိုးသမီး (Female)"],
+              ["မဖြေလိုပါ (Prefer not to say)"]
+            ],
+            resize_keyboard: true
+          }
+        );
+      }
+
+      // Keep profile data in memory only.
+      profiles.set(id, {
+        age: profileSession.age,
+        gender
+      });
+
+      sessions.delete(id);
+
+      return send(
+        id,
+        lang === "en"
+          ? "Thank you! 💚\n\nWelcome to Htoo Care. Please choose a menu below."
+          : "ကျေးဇူးတင်ပါတယ်။ 💚\n\nHtoo Care မှ ကြိုဆိုပါတယ်။ အောက်ပါ Menu ကို ရွေးချယ်ပါ။"
+      );
+    }
+  }
+
 
 if (
   profileSession &&
   profileSession.flow === "profile"
-) {
+) { 
   // Step 1: Ask age
   if (profileSession.step === "age") {
     const age = Number(input.trim());
