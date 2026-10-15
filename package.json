@@ -2,6 +2,7 @@
 {
   "name": "htoo-care-telegram-bot",
   "version": "1.0.0",
+  "description": "Htoo Care Telegram healthcare information bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
