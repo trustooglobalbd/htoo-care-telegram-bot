@@ -1,384 +1,441 @@
-const TelegramBot = require("node-telegram-bot-api");
 
-const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+const TelegramBot = require('node-telegram-bot-api');
+const express = require('express');
+
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const PORT = process.env.PORT || 3000;
 
 if (!TOKEN) {
-  throw new Error("Missing TELEGRAM_BOT_TOKEN environment variable.");
+  console.error('Missing TELEGRAM_BOT_TOKEN environment variable');
+  process.exit(1);
 }
 
-const bot = new TelegramBot(TOKEN, { polling: false });
-const sessions = new Map();
-const languages = new Map();
+const bot = new TelegramBot(TOKEN, { polling: true });
+const app = express();
 
-const TEXT = {
+// Basic health check for the hosting platform
+app.get('/', (_req, res) => {
+  res.status(200).send('Htoo Care Telegram Bot is running.');
+});
+
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Htoo Care health server listening on ${PORT}`);
+});
+
+// Temporary session data: kept in memory only.
+// Data is lost when the process restarts.
+const sessions = new Map();
+
+function getSession(id) {
+  if (!sessions.has(id)) {
+    sessions.set(id, {
+      language: 'my',
+      step: null,
+      profile: {},
+    });
+  }
+  return sessions.get(id);
+}
+
+const words = {
   my: {
-    welcome:
-      "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။ 💚\n\n" +
-      "ကျန်းမာရေးအချက်အလက်နှင့် လမ်းညွှန်မှုများကို ရွေးချယ်နိုင်ပါတယ်။",
-    menu: [
-      ["🩺 ကျန်းမာရေးအချက်အလက်", "📝 လက္ခဏာလမ်းညွှန်"],
-      ["🏥 ဆေးကုသမှုလမ်းညွှန်", "📞 7887 ဆက်သွယ်ရန်"],
-      ["🔒 ကိုယ်ရေးအချက်အလက်", "🌐 Change Language"]
-    ],
-    health: "ကျန်းမာရေးအကြောင်းအရာကို ရွေးချယ်ပါ။",
-    symptom:
-      "လက်ရှိခံစားနေရသော လက္ခဏာကို ရေးပေးပါ။ ဥပမာ - ခေါင်းကိုက်ခြင်း၊ အဖျားတက်ခြင်း၊ ချောင်းဆိုးခြင်း။",
-    duration:
-      "ဒီလက္ခဏာဖြစ်နေတာ ဘယ်လောက်ကြာပြီလဲ။ ဥပမာ - ၁ ရက်၊ ၃ ရက်။",
-    severity:
-      "လက္ခဏာပြင်းထန်မှုကို ရွေးချယ်ပါ။",
-    mild: "အနည်းငယ်",
-    medium: "အလယ်အလတ်",
-    severe: "ပြင်းထန်",
+    welcome: 'မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။',
+    choose: 'ဘာသာစကား ရွေးချယ်ပါ။',
+    menu: 'အောက်ပါ Menu မှ ရွေးချယ်ပါ။',
+    profile: 'ကိုယ်ရေးအချက်အလက် ဖြည့်သွင်းရန်',
+    health: 'ကျန်းမာရေးဗဟုသုတ',
+    symptoms: 'ခံစားနေရသော လက္ခဏာများ',
+    severity: 'အခြေအနေပြင်းထန်မှု',
+    call: '7887 ကို ဖုန်းဆက်ရန်',
+    back: 'ပင်မ Menu',
+    skip: 'ကျော်မည်',
+    cancel: 'ပယ်ဖျက်မည်',
+    age: 'သင့်အသက်ကို ရိုက်ထည့်ပါ။ ဥပမာ ၂၅။ မဖြေလိုပါက ကျော်နိုင်ပါတယ်။',
+    gender: 'ကျား / မ ရွေးချယ်ပါ။',
+    marital: 'အိမ်ထောင်ရေး အခြေအနေကို ရွေးချယ်ပါ။',
+    saved: 'အချက်အလက်ကို ယာယီ မှတ်သားထားပါပြီ။',
+    healthText:
+      'ကျန်းမာရေး အသိပညာ\n\n' +
+      '• အာဟာရမျှတစွာ စားသုံးပြီး ရေသောက်ပါ။\n' +
+      '• လက်ကို ဆပ်ပြာဖြင့် ပုံမှန်ဆေးကြောပါ။\n' +
+      '• လိင်နှင့် မျိုးဆက်ပွားကျန်းမာရေးအတွက် ယုံကြည်စိတ်ချရသော ကျန်းမာရေးဝန်ဆောင်မှုကို ရယူပါ။\n' +
+      '• ဆေးဝါးကို ကျွမ်းကျင်သူ၏ ညွှန်ကြားချက်အတိုင်း သုံးစွဲပါ။\n\n' +
+      'ဤအချက်အလက်သည် အထွေထွေ ပညာပေးချက်ဖြစ်ပြီး ဆရာဝန်၏ အကြံပြုချက်ကို အစားမထိုးပါ။',
+    symptomAsk:
+      'လက်ရှိ ဘာလက္ခဏာတွေ ခံစားနေရပါသလဲ။ စာဖြင့် ရေးပေးပါ။\n' +
+      'ဥပမာ - ဖျားခြင်း၊ ခေါင်းကိုက်ခြင်း၊ ချောင်းဆိုးခြင်း။\n' +
+      'ကိုယ်ရေးကိုယ်တာ အချက်အလက်များ မရေးပါနှင့်။',
+    severityAsk: 'သင့်အခြေအနေ ဘယ်လောက်ပြင်းထန်ပါသလဲ။',
+    mild: 'မပြင်းထန်',
+    moderate: 'အလယ်အလတ်',
+    severe: 'ပြင်းထန်',
+    symptomSaved:
+      'သင့်ဖော်ပြချက်ကို ဒီ Bot က ရောဂါအတည်ပြုရန် မသုံးပါ။ လိုအပ်ပါက ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။',
     emergency:
-      "🚨 အရေးပေါ်သတိပေးချက်\n\n" +
-      "အသက်ရှူခက်ခြင်း၊ ရင်ဘတ်ပြင်းထန်စွာနာခြင်း၊ သတိလစ်ခြင်း၊ ကိုယ်တစ်ဖက်ရုတ်တရက်အားနည်းခြင်း သို့မဟုတ် သွေးထွက်မရပ်ခြင်းရှိပါက ချက်ချင်း အရေးပေါ်ဆေးကုသမှု ရယူပါ။\n\n" +
-      "Bot သည် အရေးပေါ်ဝန်ဆောင်မှု မဟုတ်ပါ။",
-    result:
-      "သင့်အချက်အလက်ကို လက်ခံရရှိပါပြီ။\n\n" +
-      "ဒီ Bot က ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းပေးခြင်း မလုပ်နိုင်ပါ။ လက္ခဏာဆက်ဖြစ်နေပါက ဆရာဝန်နှင့် တိုင်ပင်ပါ။",
-    care:
-      "🏥 ဆေးကုသမှုလမ်းညွှန်\n\n" +
-      "နီးစပ်ရာ ဆေးရုံ၊ ဆေးခန်း သို့မဟုတ် သက်ဆိုင်ရာကျန်းမာရေးဝန်ထမ်းကို ဆက်သွယ်ပါ။\n\n" +
-      "ဆေးရုံ/ဆေးခန်းအမည်၊ မြို့နယ် သို့မဟုတ် မြို့ကို ပေးပါက သင့်တော်သောနေရာကို ရှာဖွေရန် လမ်းညွှန်ပေးနိုင်ပါတယ်။ Bot တွင် အတည်ပြုထားသော ဆေးရုံစာရင်း အလိုအလျောက်မရှိပါ။",
-    hotline:
-      "📞 7887 Healthcare Call Center\n\n" +
-      "7887 ကို ဖုန်းဖြင့် ဆက်သွယ်၍ ကျန်းမာရေးအကြံဉာဏ် ရယူနိုင်ပါတယ်။\n\n" +
-      "ဖုန်းခေါ်ဆိုခနှင့် ရရှိနိုင်မှုသည် သင့်ဖုန်းကွန်ရက်နှင့် ဝန်ဆောင်မှုအခြေအနေပေါ် မူတည်နိုင်ပါတယ်။",
-    privacy:
-      "🔒 ကိုယ်ရေးအချက်အလက်\n\n" +
-      "ဒီ Bot မှာ ကျန်းမာရေးဆိုင်ရာ ကိုယ်ရေးအချက်အလက်များ မလိုအပ်ဘဲ မပေးပါနှင့်။ လက်ရှိအသုံးပြုမှုတွင် စကားဝိုင်းအခြေအနေကို memory ထဲတွင် ယာယီသာ ထိန်းသိမ်းပြီး database ထဲသို့ မသိမ်းဆည်းပါ။ Telegram ကိုယ်တိုင်၏ ဒေတာစီမံခန့်ခွဲမှုစည်းမျဉ်းများလည်း သက်ဆိုင်ပါတယ်။",
-    back: "⬅️ ပင်မမီနူး",
-    language: "ဘာသာစကား ရွေးချယ်ပါ။"
+      '⚠️ အရေးပေါ်သတိပေးချက်\n\n' +
+      'အသက်ရှူမဝခြင်း၊ ရင်ဘတ်ပြင်းထန်စွာ နာခြင်း၊ သတိလစ်ခြင်း၊ သွေးထွက်မရပ်ခြင်း သို့မဟုတ် အသက်အန္တရာယ်ရှိနိုင်သော လက္ခဏာများရှိပါက Bot ကို မစောင့်ပါနှင့်။ နီးစပ်ရာ အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။',
+    callText:
+      '📞 7887 ကို ဆက်သွယ်နိုင်ရန် သင့်ဖုန်း၏ Dial Pad မှ 7887 ကို ခေါ်ဆိုပါ။\n\n' +
+      'ဤ Bot သည် သင့်အစား ဖုန်းခေါ်ဆိုပေးနိုင်ခြင်း မရှိပါ။ 7887 ၏ ဝန်ဆောင်မှုနှင့် ခေါ်ဆိုခကို သက်ဆိုင်ရာ ဝန်ဆောင်မှုပေးသူထံ အတည်ပြုပါ။',
+    genderOptions: ['ကျား', 'မ', 'အခြား', 'မဖြေလိုပါ'],
+    maritalOptions: ['အိမ်ထောင်ရှိ', 'အိမ်ထောင်မရှိ', 'မဖြေလိုပါ'],
+    profileDone: 'ကိုယ်ရေးအချက်အလက် ဖြည့်သွင်းမှု ပြီးပါပြီ။',
+    invalidAge: 'အသက်ကို ၁၂၀ ထက်မပိုသော ကိန်းဂဏန်းဖြင့် ရိုက်ပါ၊ သို့မဟုတ် ကျော်မည်ကို နှိပ်ပါ။',
+    cancelled: 'လုပ်ဆောင်မှုကို ပယ်ဖျက်လိုက်ပါပြီ။',
+    unknown: 'Menu မှ ရွေးချယ်ပါ၊ သို့မဟုတ် /start ကို နှိပ်ပါ။',
   },
   en: {
-    welcome:
-      "Hello! Welcome to Htoo Care. 💚\n\n" +
-      "Choose a healthcare information or guidance service below.",
-    menu: [
-      ["🩺 Health Information", "📝 Symptom Guidance"],
-      ["🏥 Find Healthcare", "📞 Contact 7887"],
-      ["🔒 Privacy Information", "🌐 Change Language"]
-    ],
-    health: "Choose a health topic.",
-    symptom: "Describe your symptom. For example: headache, fever, or cough.",
-    duration: "How long have you had this symptom? For example: 1 day or 3 days.",
-    severity: "Choose the severity of your symptom.",
-    mild: "Mild",
-    medium: "Moderate",
-    severe: "Severe",
+    welcome: 'Welcome to Htoo Care.',
+    choose: 'Please choose your language.',
+    menu: 'Choose an option below.',
+    profile: 'Personal information',
+    health: 'Health education',
+    symptoms: 'My symptoms',
+    severity: 'Symptom severity',
+    call: 'Call 7887',
+    back: 'Main menu',
+    skip: 'Skip',
+    cancel: 'Cancel',
+    age: 'Enter your age (e.g. 25), or skip if you prefer not to answer.',
+    gender: 'Choose your gender.',
+    marital: 'Choose your marital status.',
+    saved: 'Your answer has been stored temporarily.',
+    healthText:
+      'Health education\n\n' +
+      '• Eat a balanced diet and drink enough water.\n' +
+      '• Wash your hands regularly.\n' +
+      '• Seek reliable sexual and reproductive health services when needed.\n' +
+      '• Use medicines according to a qualified professional’s advice.\n\n' +
+      'This is general education, not a substitute for professional medical advice.',
+    symptomAsk:
+      'What symptoms are you experiencing? Please describe them in text.\n' +
+      'Example: fever, headache, cough.\n' +
+      'Do not include identifying personal information.',
+    severityAsk: 'How severe are your symptoms?',
+    mild: 'Mild',
+    moderate: 'Moderate',
+    severe: 'Severe',
+    symptomSaved:
+      'This bot cannot diagnose your condition. Consult a qualified health professional when needed.',
     emergency:
-      "🚨 Emergency warning\n\n" +
-      "For difficulty breathing, severe chest pain, loss of consciousness, sudden one-sided weakness, or uncontrolled bleeding, seek emergency medical care immediately.\n\n" +
-      "This bot is not an emergency service.",
-    result:
-      "Thank you. Your information has been received.\n\n" +
-      "This bot cannot diagnose conditions or prescribe treatment. Consult a qualified healthcare professional if symptoms continue or worsen.",
-    care:
-      "🏥 Healthcare guidance\n\n" +
-      "Contact a nearby hospital, clinic, or qualified healthcare professional.\n\n" +
-      "Share a town or city if you would like guidance on finding a suitable facility. This bot does not have a verified live directory.",
-    hotline:
-      "📞 7887 Healthcare Call Center\n\n" +
-      "You may call 7887 for healthcare guidance.\n\n" +
-      "Call charges and availability may depend on your mobile network and service arrangements.",
-    privacy:
-      "🔒 Privacy information\n\n" +
-      "Avoid sharing unnecessary personal or sensitive health information. This bot keeps conversation flow in temporary memory only and does not save it to a database. Telegram's own data policies also apply.",
-    back: "⬅️ Main Menu",
-    language: "Choose your language."
-  }
+      '⚠️ EMERGENCY WARNING\n\n' +
+      'For difficulty breathing, severe chest pain, loss of consciousness, uncontrolled bleeding, or other potentially life-threatening symptoms, do not wait for this bot. Seek emergency medical care immediately.',
+    callText:
+      '📞 To contact 7887, open your phone dial pad and call 7887.\n\n' +
+      'This bot cannot place a phone call for you. Please confirm the service and any call charges with the service provider.',
+    genderOptions: ['Male', 'Female', 'Other', 'Prefer not to say'],
+    maritalOptions: ['Married', 'Not married', 'Prefer not to say'],
+    profileDone: 'Your profile questions are complete.',
+    invalidAge: 'Enter a number from 1 to 120, or press Skip.',
+    cancelled: 'Action cancelled.',
+    unknown: 'Choose an option from the menu or send /start.',
+  },
 };
 
-const HEALTH_TOPICS = [
-  {
-    my: "🤒 အဖျားနှင့် အအေးမိ",
-    en: "🤒 Fever & Cold",
-    myText:
-      "အနားယူပါ၊ ရေဓာတ်လုံလောက်စွာ ဖြည့်တင်းပါ။ အသက်ရှူခက်ခြင်း၊ သတိမကောင်းခြင်း သို့မဟုတ် လက္ခဏာပြင်းထန်လာခြင်းရှိပါက အမြန်ဆေးကုသမှု ရယူပါ။",
-    enText:
-      "Rest and drink enough fluids. Seek urgent care for difficulty breathing, altered consciousness, or severe worsening symptoms."
-  },
-  {
-    my: "🤕 ခေါင်းကိုက်ခြင်း",
-    en: "🤕 Headache",
-    myText:
-      "ရေသောက်ပါ၊ အနားယူပါ။ ရုတ်တရက် အလွန်ပြင်းထန်သော ခေါင်းကိုက်ခြင်း၊ ကိုယ်တစ်ဖက်အားနည်းခြင်း သို့မဟုတ် စကားပြောခက်ခြင်းရှိပါက အရေးပေါ်ကုသမှု ရယူပါ။",
-    enText:
-      "Drink water and rest. Sudden severe headache, one-sided weakness, or difficulty speaking requires emergency assessment."
-  },
-  {
-    my: "🍽️ အစာအိမ်နှင့် အူလမ်းကြောင်း",
-    en: "🍽️ Digestive Health",
-    myText:
-      "သန့်ရှင်းသောရေကို သောက်ပါ၊ အစားအစာသန့်ရှင်းမှုကို ဂရုပြုပါ။ ဝမ်းထဲသွေးပါခြင်း၊ ဗိုက်အလွန်နာခြင်း သို့မဟုတ် ရေဓာတ်ခန်းခြောက်ခြင်းရှိပါက ဆေးကုသမှု ရယူပါ။",
-    enText:
-      "Drink safe water and maintain food hygiene. Seek care for bloody stools, severe abdominal pain, or dehydration."
-  },
-  {
-    my: "🤰 မိခင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
-    en: "🤰 Maternal & Reproductive Health",
-    myText:
-      "ကိုယ်ဝန်ဆောင်စောင့်ရှောက်မှု၊ ရာသီစက်ဝန်းနှင့် မျိုးဆက်ပွားကျန်းမာရေးဆိုင်ရာ မေးခွန်းများအတွက် ကျန်းမာရေးပညာရှင်နှင့် တိုင်ပင်ပါ။ ကိုယ်ဝန်ဆောင်စဉ် သွေးဆင်းခြင်း သို့မဟုတ် ပြင်းထန်သောဗိုက်နာခြင်းဖြစ်ပါက အမြန်ဆေးကုသမှု ရယူပါ။",
-    enText:
-      "Consult a healthcare professional about pregnancy care, menstrual health, and reproductive health. Bleeding or severe abdominal pain during pregnancy requires urgent assessment."
-  },
-  {
-    my: "💚 စိတ်ကျန်းမာရေး",
-    en: "💚 Mental Health",
-    myText:
-      "ယုံကြည်ရသူနှင့် ဆွေးနွေးပြီး အနားယူချိန်ပေးပါ။ မိမိကိုယ်ကို ထိခိုက်စေနိုင်သည့် အန္တရာယ်ရှိပါက တစ်ယောက်တည်းမနေဘဲ ယုံကြည်ရသူနှင့် အရေးပေါ်အကူအညီကို ချက်ချင်းဆက်သွယ်ပါ။",
-    enText:
-      "Talk to someone you trust and make time to rest. If you may harm yourself, do not stay alone; contact someone you trust and seek urgent professional help."
-  }
-];
-
-function langOf(id) {
-  return languages.get(id) || "my";
-}
-
-function t(id) {
-  return TEXT[langOf(id)];
-}
-
-function mainKeyboard(id) {
+function keyboard(rows) {
   return {
-    keyboard: [
-      ...t(id).menu,
-      [t(id).back]
-    ],
-    resize_keyboard: true
+    reply_markup: {
+      inline_keyboard: rows.map(row =>
+        row.map(item => ({
+          text: item.text,
+          callback_data: item.data,
+        }))
+      ),
+    },
   };
 }
 
-function send(id, message, options = {}) {
-  return bot.sendMessage(id, message, {
-    ...options,
-    reply_markup: options.reply_markup || mainKeyboard(id)
-  });
-}
-
-function hasEmergencyWords(message) {
-  const value = message.toLowerCase();
-
-  const patterns = [
-    /အသက်ရှူခက်/,
-    /ရင်ဘတ်.*နာ/,
-    /သတိလစ်/,
-    /သွေးထွက်.*မရပ်/,
-    /ကိုယ်တစ်ဖက်.*အားနည်း/,
-    /difficulty breathing/,
-    /cannot breathe/,
-    /severe chest pain/,
-    /unconscious/,
-    /uncontrolled bleeding/,
-    /one-sided weakness/
-  ];
-
-  return patterns.some((pattern) => pattern.test(value));
-}
-
-async function showLanguageMenu(id) {
-  return bot.sendMessage(id, "Choose your language / ဘာသာစကား ရွေးချယ်ပါ။", {
-    reply_markup: {
-      keyboard: [
-        ["မြန်မာဘာသာ 🇲🇲", "English 🇬🇧"]
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true
-    }
-  });
-}
-
-async function showHealthTopics(id) {
-  const lang = langOf(id);
-
-  const buttons = HEALTH_TOPICS.map((topic) => [
-    lang === "en" ? topic.en : topic.my
+function mainMenu(lang) {
+  const w = words[lang];
+  return keyboard([
+    [{ text: w.profile, data: 'profile' }],
+    [{ text: w.health, data: 'health' }],
+    [{ text: w.symptoms, data: 'symptoms' }],
+    [{ text: w.severity, data: 'severity' }],
+    [{ text: w.call, data: 'call7887' }],
+    [{ text: lang === 'my' ? '🌐 English' : '🌐 မြန်မာ', data: 'language' }],
   ]);
-
-  buttons.push([t(id).back]);
-
-  return bot.sendMessage(id, t(id).health, {
-    reply_markup: {
-      keyboard: buttons,
-      resize_keyboard: true
-    }
-  });
 }
 
-bot.on("polling_error", (error) => {
-  console.error("Telegram polling error:", error.message);
+async function showMenu(chatId, session, prefix = '') {
+  session.step = null;
+  const w = words[session.language];
+  await bot.sendMessage(
+    chatId,
+    [prefix, w.menu].filter(Boolean).join('\n\n'),
+    mainMenu(session.language)
+  );
+}
+
+async function askAge(chatId, session) {
+  session.step = 'age';
+  await bot.sendMessage(
+    chatId,
+    words[session.language].age,
+    keyboard([
+      [{ text: words[session.language].skip, data: 'skip' }],
+      [{ text: words[session.language].cancel, data: 'cancel' }],
+    ])
+  );
+}
+
+async function askGender(chatId, session) {
+  const w = words[session.language];
+  session.step = 'gender';
+  await bot.sendMessage(
+    chatId,
+    w.gender,
+    keyboard([
+      [{ text: w.genderOptions[0], data: 'gender_0' }],
+      [{ text: w.genderOptions[1], data: 'gender_1' }],
+      [{ text: w.genderOptions[2], data: 'gender_2' }],
+      [{ text: w.genderOptions[3], data: 'gender_3' }],
+      [{ text: w.skip, data: 'skip' }],
+      [{ text: w.cancel, data: 'cancel' }],
+    ])
+  );
+}
+
+async function askMarital(chatId, session) {
+  const w = words[session.language];
+  session.step = 'marital';
+  await bot.sendMessage(
+    chatId,
+    w.marital,
+    keyboard([
+      [{ text: w.maritalOptions[0], data: 'marital_0' }],
+      [{ text: w.maritalOptions[1], data: 'marital_1' }],
+      [{ text: w.maritalOptions[2], data: 'marital_2' }],
+      [{ text: w.skip, data: 'skip' }],
+      [{ text: w.cancel, data: 'cancel' }],
+    ])
+  );
+}
+
+async function askSeverity(chatId, session) {
+  const w = words[session.language];
+  session.step = 'severity';
+  await bot.sendMessage(
+    chatId,
+    w.severityAsk,
+    keyboard([
+      [{ text: w.mild, data: 'severity_mild' }],
+      [{ text: w.moderate, data: 'severity_moderate' }],
+      [{ text: w.severe, data: 'severity_severe' }],
+      [{ text: w.cancel, data: 'cancel' }],
+    ])
+  );
+}
+
+bot.onText(/^\/start$/, async msg => {
+  const session = getSession(msg.chat.id);
+  session.step = null;
+  await bot.sendMessage(
+    msg.chat.id,
+    `${words[session.language].welcome}\n\n${words[session.language].choose}`,
+    keyboard([
+      [{ text: 'မြန်မာ 🇲🇲', data: 'lang_my' }],
+      [{ text: 'English 🇬🇧', data: 'lang_en' }],
+    ])
+  );
 });
 
-bot.on("message", async (msg) => {
-  const id = msg.chat.id;
-  const input = (msg.text || "").trim();
+bot.onText(/^\/menu$/, async msg => {
+  const session = getSession(msg.chat.id);
+  await showMenu(msg.chat.id, session);
+});
 
-  if (!input) {
-    return;
-  }
+bot.onText(/^\/cancel$/, async msg => {
+  const session = getSession(msg.chat.id);
+  session.step = null;
+  await showMenu(msg.chat.id, session, words[session.language].cancelled);
+});
+
+bot.on('callback_query', async query => {
+  const chatId = query.message?.chat.id;
+  if (!chatId) return;
+
+  const session = getSession(chatId);
+  const w = words[session.language];
+  const data = query.data;
 
   try {
-    if (input === "/start" || input === "/menu") {
-      sessions.delete(id);
-      await showLanguageMenu(id);
+    await bot.answerCallbackQuery(query.id);
+
+    if (data === 'lang_my' || data === 'lang_en') {
+      session.language = data === 'lang_my' ? 'my' : 'en';
+      await showMenu(chatId, session, words[session.language].welcome);
       return;
     }
 
-    if (input === "/language" || input === "🌐 Change Language") {
-      await showLanguageMenu(id);
-      return;
-    }
-
-    if (input === "မြန်မာဘာသာ 🇲🇲") {
-      languages.set(id, "my");
-      sessions.delete(id);
-      await send(id, t(id).welcome);
-      return;
-    }
-
-    if (input === "English 🇬🇧") {
-      languages.set(id, "en");
-      sessions.delete(id);
-      await send(id, t(id).welcome);
-      return;
-    }
-
-    if (!languages.has(id)) {
-      languages.set(id, "my");
-    }
-
-    if (hasEmergencyWords(input)) {
-      sessions.delete(id);
-      await send(id, t(id).emergency);
-      return;
-    }
-
-    if (input === t(id).back) {
-      sessions.delete(id);
-      await send(id, t(id).welcome);
-      return;
-    }
-
-    if (input === "🩺 ကျန်းမာရေးအချက်အလက်" ||
-        input === "🩺 Health Information") {
-      await showHealthTopics(id);
-      return;
-    }
-
-    const topic = HEALTH_TOPICS.find(
-      (item) => input === item.my || input === item.en
-    );
-
-    if (topic) {
-      const lang = langOf(id);
-      const text = lang === "en" ? topic.enText : topic.myText;
-
-      await send(
-        id,
-        `${input}\n\n${text}\n\n` +
-        (lang === "en"
-          ? "This information is general guidance, not a diagnosis."
-          : "ဤအချက်အလက်သည် အထွေထွေလမ်းညွှန်မှုသာဖြစ်ပြီး ရောဂါအတည်ပြုချက် မဟုတ်ပါ။")
+    if (data === 'language') {
+      await bot.sendMessage(
+        chatId,
+        'Choose language / ဘာသာစကား ရွေးပါ။',
+        keyboard([
+          [{ text: 'မြန်မာ 🇲🇲', data: 'lang_my' }],
+          [{ text: 'English 🇬🇧', data: 'lang_en' }],
+        ])
       );
       return;
     }
 
-    if (input === "📝 လက္ခဏာလမ်းညွှန်" ||
-        input === "📝 Symptom Guidance") {
-      sessions.set(id, { step: "symptom" });
-      await send(id, t(id).symptom);
+    if (data === 'profile') {
+      session.profile = {};
+      await askAge(chatId, session);
       return;
     }
 
-    const session = sessions.get(id);
-
-    if (session?.step === "symptom") {
-      session.symptom = input;
-      session.step = "duration";
-      sessions.set(id, session);
-      await send(id, t(id).duration);
+    if (data === 'skip') {
+      if (session.step === 'age') {
+        session.profile.age = null;
+        await askGender(chatId, session);
+      } else if (session.step === 'gender') {
+        session.profile.gender = null;
+        await askMarital(chatId, session);
+      } else if (session.step === 'marital') {
+        session.profile.marital = null;
+        session.step = null;
+        await showMenu(chatId, session, w.profileDone);
+      } else {
+        session.step = null;
+        await showMenu(chatId, session);
+      }
       return;
     }
 
-    if (session?.step === "duration") {
-      session.duration = input;
-      session.step = "severity";
-      sessions.set(id, session);
+    if (data.startsWith('gender_')) {
+      if (session.step !== 'gender') return;
+      session.profile.gender = w.genderOptions[Number(data.slice(7))];
+      await bot.sendMessage(chatId, w.saved);
+      await askMarital(chatId, session);
+      return;
+    }
 
-      await bot.sendMessage(id, t(id).severity, {
-        reply_markup: {
-          keyboard: [
-            [t(id).mild, t(id).medium, t(id).severe],
-            [t(id).back]
-          ],
-          resize_keyboard: true
-        }
+    if (data.startsWith('marital_')) {
+      if (session.step !== 'marital') return;
+      session.profile.marital = w.maritalOptions[Number(data.slice(8))];
+      session.step = null;
+      await showMenu(chatId, session, w.profileDone);
+      return;
+    }
+
+    if (data === 'health') {
+      await bot.sendMessage(chatId, w.healthText, {
+        ...keyboard([[{ text: w.back, data: 'menu' }]]),
       });
       return;
     }
 
-    if (session?.step === "severity") {
-      session.severity = input;
-      sessions.delete(id);
-
-      const lang = langOf(id);
-      const summary = lang === "en"
-        ? `Symptom: ${session.symptom}\nDuration: ${session.duration}\nSeverity: ${session.severity}\n\n`
-        : `လက္ခဏာ: ${session.symptom}\nကြာချိန်: ${session.duration}\nပြင်းထန်မှု: ${session.severity}\n\n`;
-
-      await send(id, summary + t(id).result);
-      return;
-    }
-
-    if (input === "🏥 ဆေးကုသမှုလမ်းညွှန်" ||
-        input === "🏥 Find Healthcare") {
-      await send(id, t(id).care);
-      return;
-    }
-
-    if (input === "📞 7887 ဆက်သွယ်ရန်" ||
-        input === "📞 Contact 7887") {
-      await send(id, t(id).hotline);
-      return;
-    }
-
-    if (input === "🔒 ကိုယ်ရေးအချက်အလက်" ||
-        input === "🔒 Privacy Information") {
-      await send(id, t(id).privacy);
-      return;
-    }
-
-    await send(
-      id,
-      langOf(id) === "en"
-        ? "Please choose an option from the menu, or type /start to begin again."
-        : "ကျေးဇူးပြု၍ Menu ထဲမှ ရွေးချယ်ပါ။ ပြန်စရန် /start ကို ရိုက်ထည့်ပါ။"
-    );
-  } catch (error) {
-    console.error("Message handler error:", error.message);
-
-    try {
+    if (data === 'symptoms') {
+      session.step = 'symptoms';
       await bot.sendMessage(
-        id,
-        "တောင်းပန်ပါတယ်။ ခဏအကြာတွင် ပြန်လည်ကြိုးစားပေးပါ။ / Please try again shortly."
+        chatId,
+        w.symptomAsk,
+        keyboard([[{ text: w.cancel, data: 'cancel' }]])
       );
-    } catch (sendError) {
-      console.error("Reply error:", sendError.message);
+      return;
     }
+
+    if (data === 'severity') {
+      await bot.sendMessage(chatId, w.emergency);
+      await askSeverity(chatId, session);
+      return;
+    }
+
+    if (data.startsWith('severity_')) {
+      const severity = data.slice(9);
+      if (!['mild', 'moderate', 'severe'].includes(severity)) return;
+      session.profile.severity = severity;
+      session.step = null;
+
+      if (severity === 'severe') {
+        await bot.sendMessage(chatId, w.emergency);
+      }
+
+      await showMenu(chatId, session, w.symptomSaved);
+      return;
+    }
+
+    if (data === 'call7887') {
+      await bot.sendMessage(
+        chatId,
+        w.callText,
+        keyboard([[{ text: w.back, data: 'menu' }]])
+      );
+      return;
+    }
+
+    if (data === 'cancel' || data === 'menu') {
+      session.step = null;
+      await showMenu(
+        chatId,
+        session,
+        data === 'cancel' ? w.cancelled : ''
+      );
+      return;
+    }
+  } catch (error) {
+    console.error('Callback handling failed:', error.message);
   }
 });
 
-async function startBot() {
-  try {
-    await bot.deleteWebHook();
-    await bot.startPolling();
-    console.log("Htoo Care bot is running in polling mode.");
-  } catch (error) {
-    console.error("Could not start Telegram polling:", error.message);
-    process.exit(1);
-  }
-}
+// Handle user text only when the bot is asking a question.
+// No echo handler is used.
+bot.on('message', async msg => {
+  if (!msg.text || msg.text.startsWith('/')) return;
 
-startBot();
+  const chatId = msg.chat.id;
+  const session = getSession(chatId);
+  const w = words[session.language];
+  const text = msg.text.trim();
+
+  try {
+    if (session.step === 'age') {
+      const age = Number(text);
+      if (!Number.isInteger(age) || age < 1 || age > 120) {
+        await bot.sendMessage(chatId, w.invalidAge);
+        return;
+      }
+      session.profile.age = age;
+      await bot.sendMessage(chatId, w.saved);
+      await askGender(chatId, session);
+      return;
+    }
+
+    if (session.step === 'symptoms') {
+      if (text.length > 1500) {
+        await bot.sendMessage(
+          chatId,
+          session.language === 'my'
+            ? 'စာသားကို အတိုချုံးပြီး ပြန်ပို့ပေးပါ။'
+            : 'Please shorten your message to 1500 characters or fewer.'
+        );
+        return;
+      }
+
+      // Do not log or persist symptom text.
+      session.profile.symptoms = text;
+      await bot.sendMessage(chatId, w.symptomSaved);
+      await bot.sendMessage(chatId, w.emergency);
+      await askSeverity(chatId, session);
+      return;
+    }
+
+    await bot.sendMessage(chatId, w.unknown, mainMenu(session.language));
+  } catch (error) {
+    console.error('Message handling failed:', error.message);
+  }
+});
+
+bot.on('polling_error', error => {
+  console.error('Telegram polling error:', error.message);
+});
+
+process.on('unhandledRejection', error => {
+  console.error('Unhandled rejection:', error);
+});
