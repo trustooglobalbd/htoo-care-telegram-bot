@@ -1,4 +1,12 @@
 
+const {
+  makeUserKey,
+  ensureUser,
+  setConsent,
+  trackEvent,
+  getMonthlyReport
+} = require('./db');
+
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
