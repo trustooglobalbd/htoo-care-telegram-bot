@@ -2,7 +2,7 @@
 
 **Accessible Digital Healthcare Guidance for Myanmar**
 
-Htoo Care is a bilingual Myanmar–English Telegram healthcare bot developed by Trust Oo to help users access basic health information and healthcare guidance.
+Htoo Care is a bilingual Myanmar-English Telegram healthcare bot developed by Trust Oo to help users access basic health information and healthcare guidance.
 
 ## Key Features
 
@@ -23,5 +23,5 @@ Htoo Care is a healthcare guidance tool, not a diagnostic or treatment service. 
 ## Developed by
 
 **Trust Oo Co., Ltd.**  
-Digital Health Initiative — Htoo Care  
-Healthcare Access | Telehealth | Digital Innovation
+Digital Health Initiative- Htoo Care  
+Healthcare Access, Telehealth, Digital Innovation
