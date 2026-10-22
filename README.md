@@ -1,27 +1,27 @@
-# # Htoo Care | Trust Oo
+🌍 **Healthcare Information Should Be Accessible to Everyone.**
 
-**Accessible Digital Healthcare Guidance for Myanmar**
+What if getting basic health information were just a message away?
 
-Htoo Care is a bilingual Myanmar-English Telegram healthcare bot developed by Trust Oo to help users access basic health information and healthcare guidance.
+Introducing **Htoo Care | Trust Oo** — a bilingual Myanmar-English Telegram healthcare bot designed to help people access basic health information and connect with appropriate healthcare services.
 
-## Key Features
+💙 **What makes Htoo Care meaningful?**
 
-- **Bilingual Access:** Myanmar and English language options.
-- **Symptom Intake:** Collects basic information about users' symptoms, duration, and severity.
-- **Emergency Warning Screening:** Identifies reported warning signs and advises users to seek urgent medical care when appropriate.
-- **7887 Healthcare Access:** Guides users on contacting the 7887 Healthcare Call Center.
-- **Healthcare Information:** Provides a foundation for delivering reviewed and reliable health information.
+🔹 **Bilingual Access** — Health information in Myanmar and English  
+🔹 **Symptom Information** — A simple way for users to share their symptoms and basic health concerns  
+🔹 **Safety First** — Guidance to seek urgent medical care when warning signs are reported  
+🔹 **Connected Healthcare** — Helping users learn how to contact the 7887 Healthcare Call Center  
+🔹 **Digital Health Innovation** — Building on accessible technology to bring healthcare guidance closer to communities  
 
-## Our Mission
+At Trust Oo, we believe digital technology can help reduce barriers to healthcare information and make it easier for people to find the right support.
 
-To improve access to healthcare information and help people connect with appropriate healthcare services through accessible digital technology.
+Htoo Care is part of our ongoing journey toward more accessible and inclusive digital healthcare for Myanmar communities, including Myanmar nationals living abroad.
 
-## Important Notice
+🚀 **Our vision:** Make healthcare information easier to access, understand, and act on.
 
-Htoo Care is a healthcare guidance tool, not a diagnostic or treatment service. It does not replace a qualified healthcare professional. Users with emergency symptoms should seek urgent medical care immediately.
+*Htoo Care provides health information and guidance. It does not diagnose or treat medical conditions or replace qualified healthcare professionals. Emergency symptoms require immediate medical attention.*
 
-## Developed by
+**Developed by Trust Oo Co., Ltd.**  
+Digital Health Initiative | Htoo Care  
+*Healthcare Access • Telehealth • Digital Innovation*
 
-**Trust Oo Co., Ltd.**  
-Digital Health Initiative- Htoo Care  
-Healthcare Access, Telehealth, Digital Innovation
+#HtooCare #TrustOo #DigitalHealth #HealthTech #Telehealth #HealthcareAccess #Myanmar
