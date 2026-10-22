@@ -62,6 +62,7 @@ const mainMenu = {
     keyboard: [
       ["🩺 ကျန်းမာရေးအချက်အလက် ဖြေဆိုမယ်"],
       ["📚 ကျန်းမာရေးဗဟုသုတ ဖတ်မယ်"],
+      ["🌍 Specialist Consultation (ပြည်ပရောက် မြန်မာများ)"],
       ["📞 7887 ကို ဖုန်းဆက်မယ်"]
     ],
     resize_keyboard: true
@@ -91,6 +92,14 @@ bot.on("message", async msg => {
   const chatId = msg.chat.id;
   const text = msg.text.trim();
   const session = sessions.get(chatId);
+
+  if (text === "🌍 Specialist Consultation (ပြည်ပရောက် မြန်မာများ)") {
+    return bot.sendMessage(
+      chatId,
+      "🌍 ပြည်ပရောက် မြန်မာနိုင်ငံသားများအတွက် Specialist Consultation\n\nအထူးကုဆရာဝန်နှင့် တိုင်ပင်ဆွေးနွေးလိုပါက အောက်ပါနံပါတ်သို့ ဆက်သွယ်နိုင်ပါတယ်။\n📞 Phone / Viber / Telegram: 09 442 111 110\n\nSpecialist Consultation for Myanmar nationals living abroad\nFor specialist consultation, please contact us via Phone, Viber, or Telegram:\n📞 09 442 111 110",
+      mainMenu
+    );
+  }
 
   if (text === "📞 7887 ကို ဖုန်းဆက်မယ်") {
     return bot.sendMessage(
