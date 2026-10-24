@@ -417,24 +417,33 @@ bot.on("callback_query", async query => {
     }
 
     session.step = "processing";
-    await bot.sendMessage(chatId, "သင့်မေးခွန်းအတွက် အထွေထွေကျန်းမာရေးအချက်အလက်ကို ပြင်ဆင်နေပါတယ်။ ခဏစောင့်ပါ။");
+   await bot.sendMessage(
+  chatId,
+  "သင့်မေးခွန်းအတွက် အထွေထွေကျန်းမာရေးအချက်အလက်ကို ပြင်ဆင်နေပါတယ်။ ခဏစောင့်ပါ။"
+);
 
-    try {
-      const answer = await getGeminiHealthAnswer(session);
-      await sendLongMessage(chatId, answer);
-    } catch (error) {
-      console.error("Gemini response failed:", error.message);
-      session.step = "gemini_failed";
-      return bot.sendMessage(
-        chatId,
-        "တောင်းပန်ပါတယ်။ လက်ရှိတွင် အလိုအလျောက်ကျန်းမာရေးအဖြေကို မရရှိနိုင်ပါ။ အဖြေမရသေးသောကြောင့် ယခုအကြိမ်အတွက် အချက်အလက်ကို သိမ်းဆည်းခွင့် မတောင်းပါ။ နောက်မှ ထပ်စမ်းကြည့်ပါ။",
-        mainMenu
-      );
-    }
+let answerAvailable = false;
 
-    session.step = "consent";
-    return bot.sendMessage(
-      chatId,
+try {
+  const answer = await getGeminiHealthAnswer(session);
+  await sendLongMessage(chatId, answer);
+  answerAvailable = true;
+} catch (error) {
+  console.error("Gemini response failed:", error.message);
+
+  session.step = "consent";
+
+  await bot.sendMessage(
+    chatId,
+    "တောင်းပန်ပါတယ်။ လက်ရှိတွင် အလိုအလျောက်ကျန်းမာရေးအဖြေကို မရရှိနိုင်ပါ။ ယခုအချိန်တွင် အချက်အလက်ကိုသာ သိမ်းဆည်းရန် သဘောတူနိုင်ပါသည်။ ကျန်းမာရေးအဖြေရရှိရန် နောက်မှ ထပ်စမ်းကြည့်ပါ သို့မဟုတ် 7887 သို့ ဆက်သွယ်ပါ။",
+    mainMenu
+  );
+}
+
+// Continue to the existing consent step
+session.step = "consent";
+return bot.sendMessage
+  (
       "သင့်ဖြေဆိုချက်များကို Google Sheets ထဲ သိမ်းဆည်းရန် သဘောတူပါသလား။ သဘောတူမှသာ သိမ်းဆည်းပါမည်။\n\n" +
       "မှတ်ချက် — မသိမ်းရန် ရွေးချယ်ပါက Google Sheets ထဲ မသိမ်းပါ။ Bot နှင့် AI ဝန်ဆောင်မှုမှတစ်ဆင့် အဖြေထုတ်စဉ် ဒေတာကို လုပ်ဆောင်နိုင်သေးသည်။",
       {
