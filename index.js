@@ -1,610 +1,805 @@
-
-'use strict';
-
-const express = require('express');
-const TelegramBot = require('node-telegram-bot-api');
+const TelegramBot = require("node-telegram-bot-api");
+const express = require("express");
+const mysql = require("mysql2/promise");
+const crypto = require("crypto");
 
 const app = express();
-const PORT = Number(process.env.PORT) || 8080;
+
+let db = null;
+
+app.get("/", (req, res) => {
+  res.send("Htoo Care Bot is running");
+});
+
+app.get("/health", async (_req, res) => {
+  if (!db) {
+    return res.status(503).json({
+      status: "degraded",
+      database: "not_configured"
+    });
+  }
+
+  try {
+    await db.query("SELECT 1");
+
+    return res.json({
+      status: "ok",
+      database: "connected"
+    });
+  } catch (_error) {
+    return res.status(503).json({
+      status: "degraded",
+      database: "unavailable"
+    });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Web server running on ${PORT}`);
+});
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL =
-  process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
-let bot;
-let pollingStarted = false;
+if (!TOKEN) {
+  console.error("Missing TELEGRAM_BOT_TOKEN environment variable");
+  process.exit(1);
+}
 
-const waitingForQuestion = new Set();
-const userLanguages = new Map();
-
-// =====================================
-// 1. WEB SERVER
-// =====================================
-
-app.get('/', (_req, res) => {
-  res.status(200).send('Htoo Care Telegram Bot is running.');
-});
-
-app.get('/health', (_req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    telegramPolling: pollingStarted
+// MySQL configuration
+if (
+  process.env.MYSQL_HOST &&
+  process.env.MYSQL_DATABASE &&
+  process.env.MYSQL_USER &&
+  process.env.MYSQL_PASSWORD
+) {
+  db = mysql.createPool({
+    host: process.env.MYSQL_HOST,
+    port: Number(process.env.MYSQL_PORT || 3306),
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 5,
+    charset: "utf8mb4"
   });
+
+  db.getConnection()
+    .then(connection => {
+      console.log("MySQL connected");
+      connection.release();
+    })
+    .catch(error => {
+      console.error("MySQL connection failed:", error.message);
+    });
+} else {
+  console.warn("MySQL settings missing; responses will not be saved.");
+}
+
+// Start Telegram bot
+const bot = new TelegramBot(TOKEN, {
+  polling: true
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Htoo Care web server running on port ${PORT}`);
-});
+// Conversation sessions
+const sessions = new Map();
 
-// =====================================
-// 2. LANGUAGE HELPERS
-// =====================================
-
-function getLanguage(chatId) {
-  return userLanguages.get(chatId) || 'en';
-}
-
-function tr(chatId, english, burmese) {
-  return getLanguage(chatId) === 'my' ? burmese : english;
-}
-
-// =====================================
-// 3. MAIN MENU
-// Use inline buttons with callback_data.
-// =====================================
-
-function getMainMenu() {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '🩺 Health Information', callback_data: 'health' }
-        ],
-        [
-          { text: '🌸 SRHR Topics', callback_data: 'srhr' }
-        ],
-        [
-          { text: '💬 Ask a Health Question', callback_data: 'ask' }
-        ],
-        [
-          { text: '📞 Call 7887', callback_data: 'call7887' }
-        ],
-        [
-          {
-            text: '🌏 Overseas Myanmar Health Support',
-            callback_data: 'overseas'
-          }
-        ],
-        [
-          { text: 'ℹ️ About Htoo Care', callback_data: 'about' }
-        ],
-        [
-          { text: '🌐 Change Language', callback_data: 'language' }
-        ]
-      ]
-    }
-  };
-}
-
-async function showMainMenu(chatId) {
-  await bot.sendMessage(
-    chatId,
-    tr(
-      chatId,
-      'Welcome to Htoo Care!\n\nPlease select an option below.',
-      'Htoo Care မှ ကြိုဆိုပါတယ်။\n\nအောက်ပါ Menu မှတစ်ခုကို ရွေးချယ်ပါ။'
-    ),
-    getMainMenu()
-  );
-}
-
-// =====================================
-// 4. HEALTH INFORMATION
-// These are general educational drafts.
-// They are not a substitute for clinical advice.
-// =====================================
-
-const healthTopics = {
-  general: {
-    en: 'General Health\n\nMaintain a balanced diet, drink safe water, get enough rest, and seek advice from a qualified health professional if symptoms persist or worsen.',
-    my: 'အထွေထွေကျန်းမာရေး\n\nအာဟာရမျှတစွာစားပါ၊ သန့်ရှင်းသောရေသောက်ပါ၊ အနားယူပါ။ လက္ခဏာများ မသက်သာခြင်း သို့မဟုတ် ပိုဆိုးလာခြင်းရှိပါက ကျန်းမာရေးဝန်ထမ်းထံ အကြံဉာဏ်ရယူပါ။'
-  },
-  heat: {
-    en: 'Heat Health\n\nDrink water regularly, stay in a cool or shaded place when possible, and reduce strenuous activity during the hottest hours. Confusion, collapse, or very high body temperature may be an emergency. Seek urgent medical care.',
-    my: 'အပူဒဏ်နှင့် ကျန်းမာရေး\n\nရေကို ပုံမှန်သောက်ပါ။ ဖြစ်နိုင်ပါက အေးမြသောနေရာ သို့မဟုတ် အရိပ်တွင် နေပါ။ အပူဆုံးအချိန်များတွင် ပြင်းထန်သော ကိုယ်လက်လှုပ်ရှားမှုကို လျှော့ချပါ။ သတိရှုပ်ထွေးခြင်း၊ လဲကျခြင်း သို့မဟုတ် ကိုယ်အပူချိန် အလွန်မြင့်ခြင်းသည် အရေးပေါ်အခြေအနေ ဖြစ်နိုင်သောကြောင့် ဆေးကုသမှု အမြန်ခံယူပါ။'
-  },
-  menstrual: {
-    en: 'Menstrual Health\n\nTrack your menstrual cycle and use clean menstrual products. Seek medical advice for unusually heavy bleeding, severe pain, or concerning changes.',
-    my: 'ရာသီသွေးဆင်းခြင်း\n\nရာသီစက်ဝန်းကို မှတ်သားထားပြီး သန့်ရှင်းသော ရာသီသုံးပစ္စည်းများ အသုံးပြုပါ။ သွေးအလွန်များခြင်း၊ နာကျင်မှု ပြင်းထန်ခြင်း သို့မဟုတ် ပုံမှန်မဟုတ်သော ပြောင်းလဲမှုများရှိပါက ကျန်းမာရေးဝန်ထမ်းထံ တိုင်ပင်ပါ။'
-  },
-  pregnancy: {
-    en: 'Pregnancy Health\n\nAttend antenatal care with a qualified health professional. Heavy bleeding, severe abdominal pain, difficulty breathing, or convulsions require urgent medical attention.',
-    my: 'ကိုယ်ဝန်ဆောင်ကျန်းမာရေး\n\nကျွမ်းကျင်သော ကျန်းမာရေးဝန်ထမ်းထံ ပုံမှန်ကိုယ်ဝန်စောင့်ရှောက်မှု ခံယူပါ။ သွေးအများအပြားဆင်းခြင်း၊ ဗိုက်အလွန်နာခြင်း၊ အသက်ရှူခက်ခြင်း သို့မဟုတ် တက်ခြင်းရှိပါက အရေးပေါ်ဆေးကုသမှု ခံယူပါ။'
-  },
-  family: {
-    en: 'Family Planning\n\nContraceptive methods differ in effectiveness, benefits, and risks. A qualified health professional can help you choose a suitable method.',
-    my: 'သားဆက်ခြားခြင်း\n\nသားဆက်ခြားနည်းများသည် ထိရောက်မှု၊ အကျိုးကျေးဇူးနှင့် ဘေးထွက်ဆိုးကျိုးများ မတူညီပါ။ သင့်တော်သောနည်းလမ်းကို ရွေးချယ်ရန် ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။'
-  },
-  sti: {
-    en: 'Sexual Health\n\nSome sexually transmitted infections have no obvious symptoms. Testing and advice from a qualified health professional can help protect your health.',
-    my: 'လိင်ကျန်းမာရေး\n\nလိင်မှတစ်ဆင့် ကူးစက်သောရောဂါအချို့တွင် သိသာသောလက္ခဏာ မရှိနိုင်ပါ။ စစ်ဆေးမှုခံယူခြင်းနှင့် ကျန်းမာရေးဝန်ထမ်းထံ တိုင်ပင်ခြင်းက အထောက်အကူပြုနိုင်ပါသည်။'
+// Main menu
+const mainMenu = {
+  reply_markup: {
+    keyboard: [
+      ["🩺 ကျန်းမာရေးအချက်အလက် ဖြေဆိုမယ်"],
+      ["📚 ကျန်းမာရေးဗဟုသုတ ဖတ်မယ်"],
+      ["🌍 Specialist Consultation (ပြည်ပရောက် မြန်မာများ)"],
+      ["📞 7887 ကို ဖုန်းဆက်မယ်"]
+    ],
+    resize_keyboard: true
   }
 };
 
-function getTopicMenu(chatId) {
-  const isMyanmar = getLanguage(chatId) === 'my';
+function showMenu(chatId) {
+  sessions.delete(chatId);
 
-  const topics = isMyanmar
-    ? [
-        ['အထွေထွေကျန်းမာရေး', 'general'],
-        ['အပူဒဏ်နှင့် ကျန်းမာရေး', 'heat'],
-        ['ရာသီသွေးဆင်းခြင်း', 'menstrual'],
-        ['ကိုယ်ဝန်ဆောင်ကျန်းမာရေး', 'pregnancy'],
-        ['သားဆက်ခြားခြင်း', 'family'],
-        ['လိင်ကျန်းမာရေး', 'sti']
-      ]
-    : [
-        ['General Health', 'general'],
-        ['Heat Health', 'heat'],
-        ['Menstrual Health', 'menstrual'],
-        ['Pregnancy Health', 'pregnancy'],
-        ['Family Planning', 'family'],
-        ['Sexual Health', 'sti']
-      ];
-
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        ...topics.map(([label, key]) => [
-          { text: label, callback_data: `topic_${key}` }
-        ]),
-        [
-          {
-            text: '⬅ Main Menu',
-            callback_data: 'menu'
-          }
-        ]
-      ]
-    }
-  };
+  return bot.sendMessage(
+    chatId,
+    "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။\n\nအောက်ပါဝန်ဆောင်မှုကို ရွေးချယ်ပါ။",
+    mainMenu
+  );
 }
 
-function getTopicText(key, chatId) {
-  const topic = healthTopics[key];
-
-  if (!topic) {
-    return tr(
+// Display health categories from database
+async function showDatabaseCategories(chatId) {
+  if (!db) {
+    return bot.sendMessage(
       chatId,
-      'This topic is not available yet.',
-      'ဤအကြောင်းအရာကို လက်ရှိ မရရှိနိုင်သေးပါ။'
+      "ကျန်းမာရေးအကြောင်းအရာ database ကို လက်ရှိချိတ်ဆက်မရသေးပါ။ နောက်မှ ပြန်ကြိုးစားပါ။"
     );
   }
 
-  return topic[getLanguage(chatId)] || topic.en;
-}
-
-// =====================================
-// 5. GEMINI API
-// Used only when a user submits a question.
-// =====================================
-
-async function askGemini(question) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is missing.');
-  }
-
-  const url =
-    'https://generativelanguage.googleapis.com/v1beta/models/' +
-    encodeURIComponent(GEMINI_MODEL) +
-    ':generateContent';
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 25000);
-
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': GEMINI_API_KEY
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text:
-              'You provide general health education, not medical diagnosis. ' +
-              'Do not prescribe medicines or replace a clinician. ' +
-              'Use the same language as the user. ' +
-              'For potentially serious or emergency symptoms, recommend urgent local medical care. ' +
-              'Be respectful, concise, and clear.'
-          }]
-        },
-        contents: [{
-          role: 'user',
-          parts: [{ text: question }]
-        }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 700
-        }
-      }),
-      signal: controller.signal
-    });
+    const [categories] = await db.execute(
+      `SELECT id, name_my
+       FROM health_categories
+       WHERE is_active = 1
+       ORDER BY id ASC`
+    );
 
-    console.log('Gemini HTTP status:', response.status);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error(
-        'Gemini API error:',
-        response.status,
-        JSON.stringify(data).slice(0, 1000)
+    if (!categories.length) {
+      return bot.sendMessage(
+        chatId,
+        "လက်ရှိ အသုံးပြုနိုင်သော ကျန်းမာရေးအမျိုးအစား မရှိသေးပါ။"
       );
-
-      throw new Error(`Gemini HTTP ${response.status}`);
     }
 
-    const answer = (data.candidates?.[0]?.content?.parts || [])
-      .map(part => part.text || '')
-      .join('\n')
-      .trim();
+    const keyboard = categories.map(category => [
+      {
+        text: category.name_my,
+        callback_data: `healthcat:${category.id}`
+      }
+    ]);
 
-    if (!answer) {
-      throw new Error('Gemini returned an empty response.');
-    }
+    keyboard.push([
+      {
+        text: "🏠 ပင်မမီနူး",
+        callback_data: "healthcat:home"
+      }
+    ]);
 
-    return answer;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// =====================================
-// 6. TELEGRAM STARTUP
-// =====================================
-
-async function startBot() {
-  if (!TOKEN) {
+    return bot.sendMessage(
+      chatId,
+      "ဖတ်ရှုလိုသော ကျန်းမာရေးအမျိုးအစားကို ရွေးချယ်ပါ။",
+      {
+        reply_markup: {
+          inline_keyboard: keyboard
+        }
+      }
+    );
+  } catch (error) {
     console.error(
-      'STARTUP ERROR: TELEGRAM_BOT_TOKEN is missing.'
+      "Loading health categories failed:",
+      error.message
     );
-    return;
+
+    return bot.sendMessage(
+      chatId,
+      "ကျန်းမာရေးအမျိုးအစားများ ဖတ်ယူရာတွင် အမှားဖြစ်နေပါသည်။ နောက်မှ ပြန်ကြိုးစားပါ။"
+    );
+  }
+}
+
+// Display approved health content
+async function showDatabaseContents(chatId, categoryId) {
+  if (!db) {
+    return bot.sendMessage(
+      chatId,
+      "ကျန်းမာရေးအကြောင်းအရာ database ကို လက်ရှိချိတ်ဆက်မရသေးပါ။"
+    );
   }
 
   try {
-    bot = new TelegramBot(TOKEN, { polling: false });
+    const [contents] = await db.execute(
+      `SELECT content_code, title, body
+       FROM health_contents
+       WHERE category_id = ?
+         AND language = 'my'
+         AND review_status = 'approved'
+         AND is_active = 1
+       ORDER BY id DESC
+       LIMIT 10`,
+      [categoryId]
+    );
 
-    bot.on('polling_error', error => {
-      console.error('TELEGRAM POLLING ERROR:', error.message);
-    });
-
-    bot.on('error', error => {
-      console.error('TELEGRAM BOT ERROR:', error.message);
-    });
-
-    // Log incoming messages for debugging.
-    bot.on('message', msg => {
-      console.log(
-        '[TELEGRAM INCOMING]',
-        'chat:', msg.chat.id,
-        'text:', JSON.stringify(msg.text || '')
-      );
-    });
-
-    // /start
-    bot.onText(/^\/start(?:@\w+)?(?:\s.*)?$/i, async msg => {
-      try {
-        waitingForQuestion.delete(msg.chat.id);
-        await showMainMenu(msg.chat.id);
-      } catch (error) {
-        console.error('/start ERROR:', error.message);
-      }
-    });
-
-    // /menu
-    bot.onText(/^\/menu(?:@\w+)?$/i, async msg => {
-      try {
-        waitingForQuestion.delete(msg.chat.id);
-        await showMainMenu(msg.chat.id);
-      } catch (error) {
-        console.error('/menu ERROR:', error.message);
-      }
-    });
-
-    // /help
-    bot.onText(/^\/help(?:@\w+)?$/i, async msg => {
-      try {
-        await bot.sendMessage(
-          msg.chat.id,
-          'Send /start to open the menu. Select Ask a Health Question to submit a question.'
-        );
-      } catch (error) {
-        console.error('/help ERROR:', error.message);
-      }
-    });
-
-    // =================================
-    // 7. INLINE BUTTON HANDLER
-    // =================================
-
-    bot.on('callback_query', async query => {
-      const chatId = query.message?.chat?.id;
-      const action = query.data;
-
-      console.log(
-        '[CALLBACK RECEIVED]',
-        'action:', action,
-        'chat:', chatId
-      );
-
-      try {
-        await bot.answerCallbackQuery(query.id);
-
-        if (!chatId || !action) return;
-
-        const language = getLanguage(chatId);
-
-        if (action === 'menu') {
-          waitingForQuestion.delete(chatId);
-          await showMainMenu(chatId);
-          return;
-        }
-
-        if (action === 'health' || action === 'srhr') {
-          const intro = action === 'srhr'
-            ? tr(
-                chatId,
-                'Sexual and Reproductive Health topics:',
-                'လိင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး အကြောင်းအရာများကို ရွေးချယ်ပါ။'
-              )
-            : tr(
-                chatId,
-                'Please choose a health information topic:',
-                'ကျန်းမာရေးအကြောင်းအရာတစ်ခုကို ရွေးချယ်ပါ။'
-              );
-
-          await bot.sendMessage(
-            chatId,
-            intro,
-            getTopicMenu(chatId)
-          );
-          return;
-        }
-
-        if (action.startsWith('topic_')) {
-          const key = action.slice('topic_'.length);
-
-          await bot.sendMessage(
-            chatId,
-            getTopicText(key, chatId),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: '⬅ Main Menu',
-                      callback_data: 'menu'
-                    }
-                  ]
-                ]
-              }
-            }
-          );
-          return;
-        }
-
-        if (action === 'ask') {
-          waitingForQuestion.add(chatId);
-
-          await bot.sendMessage(
-            chatId,
-            tr(
-              chatId,
-              'Please type your health question in your next message. This service provides general health education only and does not replace a qualified health professional.',
-              'သင့်ကျန်းမာရေးမေးခွန်းကို နောက်စာတိုအဖြစ် ပို့ပေးပါ။ ဤဝန်ဆောင်မှုသည် အထွေထွေကျန်းမာရေးပညာပေးအတွက်သာ ဖြစ်ပြီး ဆရာဝန်၏ စစ်ဆေးကုသမှုကို အစားမထိုးနိုင်ပါ။'
-            )
-          );
-          return;
-        }
-
-        if (action === 'call7887') {
-          await bot.sendMessage(
-            chatId,
-            tr(
-              chatId,
-              '7887 Healthcare Call Center\n\nPlease check availability with your mobile operator. If you have an emergency, seek urgent local medical care.',
-              '7887 Healthcare Call Center\n\nသင့်မိုဘိုင်းအော်ပရေတာထံ ဝန်ဆောင်မှုရရှိနိုင်မှုကို စစ်ဆေးပါ။ အရေးပေါ်အခြေအနေဖြစ်ပါက နီးစပ်ရာ အရေးပေါ်ဆေးကုသမှုကို ခံယူပါ။'
-            )
-          );
-          return;
-        }
-
-        if (action === 'overseas') {
-          await bot.sendMessage(
-            chatId,
-            tr(
-              chatId,
-              'Overseas Myanmar Health Support\n\nPlease contact Trust Oo through its officially verified contact channels. Do not share sensitive medical information in a public chat.',
-              'ပြည်ပရောက် မြန်မာနိုင်ငံသားများအတွက် ကျန်းမာရေးအကူအညီ\n\nTrust Oo ၏ အတည်ပြုထားသော ဆက်သွယ်ရေးလမ်းကြောင်းများမှ ဆက်သွယ်ပါ။ အများမြင်နိုင်သော chat တွင် ကိုယ်ရေးကိုယ်တာ ဆေးဘက်ဆိုင်ရာအချက်အလက်များ မမျှဝေပါနှင့်။'
-            )
-          );
-          return;
-        }
-
-        if (action === 'about') {
-          await bot.sendMessage(
-            chatId,
-            tr(
-              chatId,
-              'Htoo Care provides health information and education. Automated information is not a diagnosis and does not replace advice from a qualified health professional.',
-              'Htoo Care သည် ကျန်းမာရေးဆိုင်ရာ အချက်အလက်နှင့် ပညာပေးဝန်ဆောင်မှုများကို ပေးပါသည်။ အလိုအလျောက်ပေးသော အချက်အလက်များသည် ရောဂါရှာဖွေခြင်းမဟုတ်သလို ကျွမ်းကျင်သော ကျန်းမာရေးဝန်ထမ်း၏ အကြံဉာဏ်ကိုလည်း အစားမထိုးနိုင်ပါ။'
-            )
-          );
-          return;
-        }
-
-        if (action === 'language') {
-          await bot.sendMessage(
-            chatId,
-            'Choose your language / ဘာသာစကားရွေးချယ်ပါ။',
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [{ text: 'English', callback_data: 'lang_en' }],
-                  [{ text: 'မြန်မာ', callback_data: 'lang_my' }],
-                  [{ text: '⬅ Main Menu', callback_data: 'menu' }]
-                ]
-              }
-            }
-          );
-          return;
-        }
-
-        if (action === 'lang_en' || action === 'lang_my') {
-          userLanguages.set(
-            chatId,
-            action === 'lang_my' ? 'my' : 'en'
-          );
-
-          await showMainMenu(chatId);
-          return;
-        }
-
-        console.warn('Unknown callback action:', action);
-
-      } catch (error) {
-        console.error('CALLBACK HANDLER ERROR:', error.message);
-
-        try {
-          await bot.sendMessage(
-            chatId,
-            'Sorry, this option could not be processed. Please send /start and try again.'
-          );
-        } catch (sendError) {
-          console.error(
-            'Could not send callback error:',
-            sendError.message
-          );
-        }
-      }
-    });
-
-    // =================================
-    // 8. HEALTH QUESTION MESSAGE HANDLER
-    // =================================
-
-    bot.on('message', async msg => {
-      if (!msg.text || msg.text.startsWith('/')) return;
-
-      const chatId = msg.chat.id;
-
-      if (!waitingForQuestion.has(chatId)) return;
-
-      waitingForQuestion.delete(chatId);
-
-      try {
-        await bot.sendChatAction(chatId, 'typing');
-
-        const answer = await askGemini(msg.text);
-
-        const chunks = answer.match(/[\s\S]{1,3500}/g) || [answer];
-
-        for (const chunk of chunks) {
-          await bot.sendMessage(chatId, chunk);
-        }
-
-        await bot.sendMessage(
-          chatId,
-          tr(
-            chatId,
-            'Reminder: This is general health education, not a medical diagnosis.',
-            'သတိပြုရန် — ဤအချက်အလက်သည် အထွေထွေကျန်းမာရေးပညာပေးသာဖြစ်ပြီး ရောဂါရှာဖွေချက် မဟုတ်ပါ။'
-          ),
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: '⬅ Main Menu', callback_data: 'menu' }]
+    if (!contents.length) {
+      return bot.sendMessage(
+        chatId,
+        "ဒီအမျိုးအစားအတွက် စိစစ်အတည်ပြုပြီး အသုံးပြုခွင့်ဖွင့်ထားသော အကြောင်းအရာ မရှိသေးပါ။",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "⬅️ အမျိုးအစားများ",
+                  callback_data: "healthcat:list"
+                }
+              ],
+              [
+                {
+                  text: "🏠 ပင်မမီနူး",
+                  callback_data: "healthcat:home"
+                }
               ]
-            }
+            ]
           }
-        );
-
-      } catch (error) {
-        console.error('HEALTH QUESTION ERROR:', error.message);
-
-        let reply = tr(
-          chatId,
-          'Sorry, health information is temporarily unavailable. Please try again later or contact a qualified health professional.',
-          'တောင်းပန်ပါတယ်။ လက်ရှိတွင် ကျန်းမာရေးအချက်အလက်ကို မရရှိနိုင်သေးပါ။ နောက်မှ ထပ်စမ်းကြည့်ပါ သို့မဟုတ် ကျန်းမာရေးဝန်ထမ်းနှင့် တိုင်ပင်ပါ။'
-        );
-
-        if (!GEMINI_API_KEY) {
-          reply = tr(
-            chatId,
-            'Health question support is not configured yet. Please contact the administrator.',
-            'ကျန်းမာရေးမေးခွန်းဖြေကြားမှုကို မသတ်မှတ်ရသေးပါ။ စီမံခန့်ခွဲသူထံ ဆက်သွယ်ပါ။'
-          );
-        } else if (error.name === 'AbortError') {
-          reply = tr(
-            chatId,
-            'The request timed out. Please try again later.',
-            'တောင်းဆိုမှု ကြာမြင့်သွားပါသည်။ နောက်မှ ထပ်စမ်းကြည့်ပါ။'
-          );
         }
+      );
+    }
 
-        try {
-          await bot.sendMessage(chatId, reply);
-        } catch (sendError) {
-          console.error(
-            'Could not send health error:',
-            sendError.message
-          );
+    for (const item of contents) {
+      const message = `📘 ${item.title}\n\n${item.body}`;
+      const chunks = message.match(/[\s\S]{1,4000}/g) || [];
+
+      for (const chunk of chunks) {
+        await bot.sendMessage(chatId, chunk);
+      }
+    }
+
+    return bot.sendMessage(
+      chatId,
+      "အခြားအကြောင်းအရာများကိုလည်း ဖတ်ရှုနိုင်ပါတယ်။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "⬅️ အမျိုးအစားများ",
+                callback_data: "healthcat:list"
+              }
+            ],
+            [
+              {
+                text: "🏠 ပင်မမီနူး",
+                callback_data: "healthcat:home"
+              }
+            ]
+          ]
         }
       }
-    });
-
-    // Confirm credentials and start polling.
-    const me = await bot.getMe();
-
-    console.log(
-      `Telegram token OK. Connected as @${me.username}.`
+    );
+  } catch (error) {
+    console.error(
+      "Loading health content failed:",
+      error.message
     );
 
-    await bot.startPolling();
-    pollingStarted = true;
-
-    console.log('Telegram polling started. Send /start to the bot.');
-
-  } catch (error) {
-    pollingStarted = false;
-    console.error('TELEGRAM STARTUP ERROR:', error.message);
+    return bot.sendMessage(
+      chatId,
+      "ကျန်းမာရေးအကြောင်းအရာ ဖတ်ယူရာတွင် အမှားဖြစ်နေပါသည်။ နောက်မှ ပြန်ကြိုးစားပါ။"
+    );
   }
 }
 
-// =====================================
-// 9. GRACEFUL SHUTDOWN
-// =====================================
+// Start command
+bot.onText(/^\/start$/, msg => {
+  showMenu(msg.chat.id);
+});
 
-async function shutdown(signal) {
-  console.log(`${signal} received. Shutting down...`);
+// Cancel command
+bot.onText(/^\/cancel$/, msg => {
+  showMenu(msg.chat.id);
+});
 
-  try {
-    if (bot && pollingStarted) {
-      await bot.stopPolling();
+// Receive messages
+bot.on("message", async msg => {
+  if (!msg.text) return;
+
+  const chatId = msg.chat.id;
+  const text = msg.text.trim();
+
+  if (text === "/cancel") {
+    sessions.delete(chatId);
+
+    return bot.sendMessage(
+      chatId,
+      "လက်ရှိ မေးမြန်းမှုကို ရပ်လိုက်ပါပြီ။",
+      mainMenu
+    );
+  }
+
+  if (text.startsWith("/")) return;
+
+  const session = sessions.get(chatId);
+
+  // Specialist consultation for Myanmar nationals abroad
+  if (
+    text === "🌍 Specialist Consultation (ပြည်ပရောက် မြန်မာများ)"
+  ) {
+    return bot.sendMessage(
+      chatId,
+      "🌍 ပြည်ပရောက် မြန်မာနိုင်ငံသားများအတွက် Specialist Consultation\n\n" +
+      "အထူးကုဆရာဝန်နှင့် တိုင်ပင်ဆွေးနွေးလိုပါက အောက်ပါနံပါတ်သို့ ဆက်သွယ်နိုင်ပါတယ်။\n" +
+      "📞 Phone / Viber / Telegram: 09 442 111 110\n\n" +
+      "Specialist Consultation for Myanmar nationals living abroad\n" +
+      "For specialist consultation, please contact us via Phone, Viber, or Telegram:\n" +
+      "📞 09 442 111 110",
+      mainMenu
+    );
+  }
+
+  // Call 7887
+  if (text === "📞 7887 ကို ဖုန်းဆက်မယ်") {
+    return bot.sendMessage(
+      chatId,
+      "ကျန်းမာရေးအကြံဉာဏ် ရယူရန် 7887 သို့ ဖုန်းဆက်နိုင်ပါတယ်။\n\n" +
+      "အရေးပေါ်အခြေအနေဖြစ်ပါက မိမိဒေသရှိ အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "📞 7887",
+                callback_data: "call_7887"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  // Health education menu
+  if (text === "📚 ကျန်းမာရေးဗဟုသုတ ဖတ်မယ်") {
+    return bot.sendMessage(
+      chatId,
+      "ဖတ်ရှုလိုသော အကြောင်းအရာကို ရွေးပါ။",
+      {
+        reply_markup: {
+          keyboard: [
+            ["🌞 အပူဒဏ်ကာကွယ်ရေး"],
+            ["🥗 အာဟာရနှင့် ကျန်းမာရေး"],
+            ["🤰 မိခင်နှင့် ကလေးကျန်းမာရေး"],
+            ["🩺 လက္ခဏာများရှိလျှင် ဘာလုပ်မလဲ"],
+            ["🗂️ Database မှ ကျန်းမာရေးအကြောင်းအရာများ"],
+            ["🏠 ပင်မမီနူး"]
+          ],
+          resize_keyboard: true
+        }
+      }
+    );
+  }
+
+  if (text === "🗂️ Database မှ ကျန်းမာရေးအကြောင်းအရာများ") {
+    sessions.delete(chatId);
+    return showDatabaseCategories(chatId);
+  }
+
+  // Basic health education content
+  const articles = {
+    "🌞 အပူဒဏ်ကာကွယ်ရေး":
+      "အပူဒဏ်ကာကွယ်ရန်\n" +
+      "• ရေကို ပုံမှန်သောက်ပါ။\n" +
+      "• နေပူပြင်းချိန်တွင် အပြင်ထွက်ခြင်းကို လျှော့ချပါ။\n" +
+      "• အရိပ်ရပြီး လေဝင်လေထွက်ကောင်းသော နေရာတွင် နေပါ။\n" +
+      "• မူးဝေခြင်း၊ သတိလစ်ခြင်း သို့မဟုတ် စိတ်ရှုပ်ထွေးခြင်းရှိပါက အရေးပေါ်အကူအညီ ရယူပါ။",
+
+    "🥗 အာဟာရနှင့် ကျန်းမာရေး":
+      "အာဟာရမျှတစေရန် အစားအစာအမျိုးမျိုးကို သင့်တင့်မျှတစွာ စားပါ။ " +
+      "ဟင်းသီးဟင်းရွက်၊ သစ်သီး၊ ပရိုတင်းပါသော အစားအစာများနှင့် သန့်ရှင်းသောရေကို ရွေးချယ်ပါ။",
+
+    "🤰 မိခင်နှင့် ကလေးကျန်းမာရေး":
+      "ကိုယ်ဝန်ဆောင်စောင့်ရှောက်မှုနှင့် ကလေးကျန်းမာရေးအတွက် ကျန်းမာရေးဝန်ထမ်းထံ ပုံမှန်တိုင်ပင်ပါ။ " +
+      "စိုးရိမ်ရသော လက္ခဏာများရှိပါက ဆေးကုသမှုကို မနှောင့်နှေးပါနှင့်။",
+
+    "🩺 လက္ခဏာများရှိလျှင် ဘာလုပ်မလဲ":
+      "လက္ခဏာများကို ကိုယ်တိုင်ရောဂါသတ်မှတ်ရန် မကြိုးစားပါနှင့်။ " +
+      "အသက်ရှူရခက်ခြင်း၊ သတိလစ်ခြင်း၊ ရင်ဘတ်ပြင်းထန်စွာနာခြင်းကဲ့သို့ အရေးပေါ်လက္ခဏာများရှိပါက " +
+      "ချက်ချင်း အရေးပေါ်ဆေးကုသမှု ရယူပါ။ အခြားကျန်းမာရေးမေးခွန်းများအတွက် 7887 သို့ ဆက်သွယ်နိုင်ပါသည်။"
+  };
+
+  if (articles[text]) {
+    return bot.sendMessage(chatId, articles[text], mainMenu);
+  }
+
+  if (text === "🏠 ပင်မမီနူး") {
+    return showMenu(chatId);
+  }
+
+  // Start health consultation
+  if (text === "🩺 ကျန်းမာရေးအချက်အလက် ဖြေဆိုမယ်") {
+    sessions.set(chatId, {
+      step: "age",
+      language: "my"
+    });
+
+    return bot.sendMessage(
+      chatId,
+      "သင့်အသက်ကို နှစ်ဖြင့် ရိုက်ထည့်ပါ။ (ဥပမာ - 25)\n\n" +
+      "ရပ်လိုပါက /cancel ကို ရိုက်ပါ။"
+    );
+  }
+
+  if (!session) return;
+
+  // Age step
+  if (session.step === "age") {
+    const age = Number(text);
+
+    if (!Number.isInteger(age) || age < 1 || age > 120) {
+      return bot.sendMessage(
+        chatId,
+        "အသက်ကို 1 မှ 120 အတွင်း ဂဏန်းဖြင့် ရိုက်ထည့်ပါ။"
+      );
     }
-  } catch (error) {
-    console.error('Polling shutdown error:', error.message);
+
+    session.age = age;
+    session.step = "gender";
+
+    return bot.sendMessage(
+      chatId,
+      "သင့်ကျား/မ ကို ရွေးပါ။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "ကျား",
+                callback_data: "gender_male"
+              }
+            ],
+            [
+              {
+                text: "မ",
+                callback_data: "gender_female"
+              }
+            ],
+            [
+              {
+                text: "မဖြေလိုပါ",
+                callback_data: "gender_skip"
+              }
+            ]
+          ]
+        }
+      }
+    );
   }
 
-  server.close(() => process.exit(0));
+  // Symptom or question step
+  if (session.step === "symptom") {
+    if (text.length < 2 || text.length > 1500) {
+      return bot.sendMessage(
+        chatId,
+        "မေးခွန်းကို စာလုံး 2 မှ 1500 အတွင်း ရေးပေးပါ။"
+      );
+    }
 
-  setTimeout(() => process.exit(1), 5000).unref();
-}
+    const urgent =
+      /အသက်ရှူ.{0,10}(ခက်|မရ)|သတိလစ်|ရင်ဘတ်.{0,10}(ပြင်းထန်|အရမ်း).{0,10}နာ|သွေးထွက်.{0,10}(များ|မရပ်)|severe chest pain|difficulty breathing|unconscious|heavy bleeding/i.test(text);
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+    session.symptom = text;
 
-// Start Telegram only after registering all handlers.
-startBot();
+    if (urgent) {
+      sessions.delete(chatId);
+
+      return bot.sendMessage(
+        chatId,
+        "🚨 အရေးပေါ်သတိပေးချက်\n\n" +
+        "ဖော်ပြထားသော လက္ခဏာများသည် အရေးပေါ်ဖြစ်နိုင်ပါသည်။ " +
+        "Bot ကို ဆက်မစောင့်ဘဲ အနီးဆုံးဆေးရုံ/အရေးပေါ်ဆေးကုသမှုကို ချက်ချင်းရယူပါ။ " +
+        "7887 ကို စောင့်ဆိုင်းခြင်းကြောင့် ကုသမှု မနှောင့်နှေးပါစေနှင့်။",
+        mainMenu
+      );
+    }
+
+    session.step = "duration";
+
+    return bot.sendMessage(
+      chatId,
+      "ဒီလက္ခဏာ သို့မဟုတ် ပြဿနာက ဘယ်လောက်ကြာပြီလဲ။ " +
+      "ဥပမာ — ဒီနေ့မှ၊ ၂ ရက်၊ ၁ ပတ်။"
+    );
+  }
+
+  // Duration step
+  if (session.step === "duration") {
+    if (text.length < 1 || text.length > 100) {
+      return bot.sendMessage(
+        chatId,
+        "ကြာချိန်ကို အတိုချုံး ပြန်ရေးပေးပါ။"
+      );
+    }
+
+    session.duration = text;
+    session.step = "severity";
+
+    return bot.sendMessage(
+      chatId,
+      "လက္ခဏာ ပြင်းထန်မှုကို ရွေးချယ်ပါ။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🟢 အနည်းငယ်",
+                callback_data: "severity_mild"
+              }
+            ],
+            [
+              {
+                text: "🟡 အလယ်အလတ်",
+                callback_data: "severity_moderate"
+              }
+            ],
+            [
+              {
+                text: "🔴 ပြင်းထန်",
+                callback_data: "severity_severe"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+});
+
+// Handle button selections
+bot.on("callback_query", async query => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+  const session = sessions.get(chatId);
+
+  await bot.answerCallbackQuery(query.id);
+
+  // Health education navigation
+  if (data === "healthcat:home") {
+    return showMenu(chatId);
+  }
+
+  if (data === "healthcat:list") {
+    return showDatabaseCategories(chatId);
+  }
+
+  if (data.startsWith("healthcat:")) {
+    const categoryId = Number(data.split(":")[1]);
+
+    if (!Number.isSafeInteger(categoryId) || categoryId < 1) {
+      return bot.sendMessage(
+        chatId,
+        "အမျိုးအစားရွေးချယ်မှု မမှန်ကန်ပါ။"
+      );
+    }
+
+    return showDatabaseContents(chatId, categoryId);
+  }
+
+  // 7887 call instructions
+  if (data === "call_7887") {
+    return bot.sendMessage(
+      chatId,
+      "သင့်ဖုန်း၏ ဖုန်းခေါ်ဆိုမှုစနစ်ကို ဖွင့်ပြီး 7887 ကို ကိုယ်တိုင်ခေါ်ဆိုပါ။ " +
+      "Telegram Bot က သင့်အစား ဖုန်းခေါ်ဆိုပေးနိုင်ခြင်း မရှိပါ။"
+    );
+  }
+
+  if (!session) return;
+
+  // Gender selection
+  if (data.startsWith("gender_") && session.step === "gender") {
+    const genderMap = {
+      gender_male: "male",
+      gender_female: "female",
+      gender_skip: "prefer_not_to_say"
+    };
+
+    if (!genderMap[data]) return;
+
+    session.gender = genderMap[data];
+    session.step = "topic";
+    session.marital_status = "not_collected";
+
+    return bot.sendMessage(
+      chatId,
+      "ဘယ်ကျန်းမာရေးအကြောင်းအရာနဲ့ ပတ်သက်ပြီး မေးမြန်းလိုပါသလဲ။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "🩺 အထွေထွေကျန်းမာရေး",
+                callback_data: "topic_general"
+              }
+            ],
+            [
+              {
+                text: "🌸 SRHR / လိင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
+                callback_data: "topic_srhr"
+              }
+            ],
+            [
+              {
+                text: "🩸 ရာသီလာခြင်း",
+                callback_data: "topic_menstrual"
+              }
+            ],
+            [
+              {
+                text: "🤰 ကိုယ်ဝန်ဆောင်ကျန်းမာရေး",
+                callback_data: "topic_pregnancy"
+              }
+            ],
+            [
+              {
+                text: "🛡️ STI/HIV ကာကွယ်ရေး",
+                callback_data: "topic_sti"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  // Health topic selection
+  if (data.startsWith("topic_") && session.step === "topic") {
+    const topics = {
+      topic_general: "general_health",
+      topic_srhr: "srhr",
+      topic_menstrual: "menstrual_health",
+      topic_pregnancy: "pregnancy_health",
+      topic_sti: "sti_hiv"
+    };
+
+    const labels = {
+      topic_general: "အထွေထွေကျန်းမာရေး",
+      topic_srhr: "SRHR / လိင်နှင့် မျိုးဆက်ပွားကျန်းမာရေး",
+      topic_menstrual: "ရာသီလာခြင်း",
+      topic_pregnancy: "ကိုယ်ဝန်ဆောင်ကျန်းမာရေး",
+      topic_sti: "STI/HIV ကာကွယ်ရေး"
+    };
+
+    if (!topics[data]) return;
+
+    session.topic = topics[data];
+    session.topic_label = labels[data];
+    session.step = "symptom";
+
+    return bot.sendMessage(
+      chatId,
+      `ရွေးချယ်ထားသောအကြောင်းအရာ — ${session.topic_label}\n\n` +
+      "ဘယ်လိုလက္ခဏာ၊ ပြဿနာ သို့မဟုတ် မေးခွန်းရှိပါသလဲ။ စာဖြင့် ရေးပေးပါ။\n\n" +
+      "အမည်၊ နေရပ်လိပ်စာ၊ မှတ်ပုံတင်နံပါတ်ကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။"
+    );
+  }
+
+  // Severity selection
+  if (data.startsWith("severity_") && session.step === "severity") {
+    const severityMap = {
+      severity_mild: "အနည်းငယ်",
+      severity_moderate: "အလယ်အလတ်",
+      severity_severe: "ပြင်းထန်"
+    };
+
+    const severity = severityMap[data];
+
+    if (!severity) return;
+
+    session.severity = severity;
+
+    if (data === "severity_severe") {
+      await bot.sendMessage(
+        chatId,
+        "⚠️ လက္ခဏာကို ပြင်းထန်သည်ဟု ရွေးထားပါသည်။ " +
+        "အခြေအနေ ပိုဆိုးလာခြင်း၊ အသက်ရှူရခက်ခြင်း၊ သတိလစ်ခြင်း၊ " +
+        "ရင်ဘတ်ပြင်းထန်စွာနာခြင်းရှိပါက အရေးပေါ်ဆေးကုသမှု ချက်ချင်းရယူပါ။"
+      );
+    }
+
+    session.step = "consent";
+
+    return bot.sendMessage(
+      chatId,
+      "သင့်ဖြေဆိုချက်များကို သိမ်းဆည်းရန် သဘောတူပါသလား။\n\n" +
+      "သဘောတူပါက Telegram Chat ID၊ အသက်၊ ကျား/မ၊ " +
+      "ရွေးချယ်ထားသောအကြောင်းအရာနှင့် ဖြေဆိုချက်များကို သိမ်းဆည်းမည်ဖြစ်သည်။\n\n" +
+      "မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မပို့ပါနှင့်။",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: "သဘောတူပြီး သိမ်းမယ်",
+                callback_data: "consent_yes"
+              }
+            ],
+            [
+              {
+                text: "မသိမ်းပါနဲ့",
+                callback_data: "consent_no"
+              }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  // User declines data storage
+  if (data === "consent_no") {
+    sessions.delete(chatId);
+
+    return bot.sendMessage(
+      chatId,
+      "သဘောတူညီမှု မပေးထားသောကြောင့် ဖြေဆိုချက်များကို database ထဲ မသိမ်းပါ။",
+      mainMenu
+    );
+  }
+
+  // User agrees to data storage
+  if (data === "consent_yes" && session.step === "consent") {
+    if (!db) {
+      sessions.delete(chatId);
+
+      return bot.sendMessage(
+        chatId,
+        "လက်ရှိ ဒေတာသိမ်းဆည်းမှု မရနိုင်သေးပါ။ " +
+        "သင့်ဖြေဆိုချက်များကို မသိမ်းထားပါ။ Database ကို စစ်ဆေးပြီးမှ ပြန်ကြိုးစားပါ။",
+        mainMenu
+      );
+    }
+
+    try {
+      const requestId = crypto.randomUUID();
+
+      const details =
+        `Topic: ${session.topic_label || "General health"}\n` +
+        `Question/Symptom: ${session.symptom}\n` +
+        `Duration: ${session.duration || "Not provided"}\n` +
+        `Severity: ${session.severity || "Not provided"}`;
+
+      const symptomSummary =
+        `${session.symptom} | Duration: ${session.duration || "Not provided"} | ` +
+        `Severity: ${session.severity || "Not provided"}`;
+
+      await db.execute(
+        `INSERT INTO consultation_requests
+        (request_id, telegram_chat_id, topic, language, details,
+         consent_given, consent_at, status, age, gender, marital_status, symptom)
+        VALUES (?, ?, ?, ?, ?, ?, NOW(), 'pending', ?, ?, ?, ?)`,
+        [
+          requestId,
+          String(chatId),
+          session.topic || "general_health",
+          "my",
+          details,
+          1,
+          session.age,
+          session.gender,
+          session.marital_status || "not_collected",
+          symptomSummary.slice(0, 100)
+        ]
+      );
+
+      const topicLabel = session.topic_label || "ကျန်းမာရေး";
+      const duration = session.duration || "မဖြေထားပါ";
+      const severity = session.severity || "မဖြေထားပါ";
+
+      sessions.delete(chatId);
+
+      return bot.sendMessage(
+        chatId,
+        "သင့်ဖြေဆိုချက်များကို အောင်မြင်စွာ သိမ်းဆည်းပြီးပါပြီ။\n\n" +
+        `အကြောင်းအရာ — ${topicLabel}\n` +
+        `ကြာချိန် — ${duration}\n` +
+        `ပြင်းထန်မှု — ${severity}\n\n` +
+        "ဤ Bot သည် ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မပြုပါ။ " +
+        "မြန်မာနိုင်ငံအတွင်းရှိပါက 7887 သို့ ဆက်သွယ်တိုင်ပင်နိုင်ပါသည်။\n\n" +
+        "ပြည်ပရောက် မြန်မာများအတွက် Specialist Consultation:\n" +
+        "09 442 111 110 (Phone/Viber/Telegram)",
+        mainMenu
+      );
+    } catch (error) {
+      console.error(
+        "Saving response failed:",
+        error.message
+      );
+
+      return bot.sendMessage(
+        chatId,
+        "ဒေတာသိမ်းဆည်းရာတွင် အမှားဖြစ်နေပါသည်။ " +
+        "သင့်ဖြေဆိုချက်များ သိမ်းပြီးကြောင်း မအတည်ပြုနိုင်သေးပါ။ နောက်မှ ထပ်ကြိုးစားပါ။",
+        mainMenu
+      );
+    }
+  }
+});
+
+// Telegram polling errors
+bot.on("polling_error", error => {
+  console.error(
+    "Telegram polling error:",
+    error.message
+  );
+});
+
+console.log("Htoo Care Telegram Bot started.");
