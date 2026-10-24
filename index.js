@@ -42,6 +42,13 @@ const bot = new TelegramBot(TOKEN, {
     autoStart: false,
     interval: 300,
     params: { timeout: 10 }
+    bot.on("message", (msg) => {
+  console.log(
+    "[TELEGRAM INCOMING]",
+    "type:", msg.chat.type,
+    "text:", JSON.stringify(msg.text || "")
+  );
+});
   }
 });
 
