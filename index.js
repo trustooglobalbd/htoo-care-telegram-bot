@@ -38,17 +38,11 @@ const server = app.listen(PORT, "0.0.0.0", () => {
 // ==================== TELEGRAM BOT ====================
 
 const bot = new TelegramBot(TOKEN, {
-  polling: {
-    autoStart: false,
-    interval: 300,
-    params: { timeout: 10 }
-    bot.on("message", (msg) => {
-  console.log(
-    "[TELEGRAM INCOMING]",
-    "type:", msg.chat.type,
-    "text:", JSON.stringify(msg.text || "")
-  );
+  polling: false
 });
+
+bot.on("message", (msg) => {
+  console.log("[TELEGRAM INCOMING]", msg.text || "");
   }
 });
 
