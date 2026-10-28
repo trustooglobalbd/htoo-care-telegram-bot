@@ -388,6 +388,7 @@ bot.on("callback_query", async query => {
     session.saveQuiz = data === "quiz_save_yes";
     session.step = "quiz";
     session.questions = shuffle(quizBank);
+    session.quizTopic = "Mixed health education";
     session.index = 0;
     session.score = 0;
     session.sessionId = crypto.randomUUID();
