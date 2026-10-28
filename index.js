@@ -303,8 +303,23 @@ bot.on("callback_query", async query => {
     };
     if (!map[data]) return;
     session.topic = map[data];
+    session.step = "health_ai_consent";
+    return bot.sendMessage(chatId,
+      "ကိုယ်ရေးလုံခြုံမှု အသိပေးချက် — သင့်မေးခွန်းကို AI ဝန်ဆောင်မှုသို့ ပို့၍ အထွေထွေကျန်းမာရေးပညာပေးအဖြေ ထုတ်ပေးမည်ဖြစ်သည်။ AI အဖြေသည် ရောဂါအတည်ပြုချက် သို့မဟုတ် ဆေးညွှန်း မဟုတ်ပါ။ Google Sheets ထဲ သိမ်းဆည်းခြင်းကို နောက်တစ်ဆင့်တွင် သီးခြားသဘောတူညီမှုတောင်းပါမည်။ အမည်၊ မှတ်ပုံတင်နံပါတ်၊ ဖုန်းနံပါတ်၊ လိပ်စာ သို့မဟုတ် အခြားသူကို ဖော်ထုတ်နိုင်သော အချက်အလက်များ မထည့်ပါနှင့်။",
+      { reply_markup: { inline_keyboard: [
+        [{ text: "နားလည်ပါပြီ၊ ဆက်လုပ်မယ်", callback_data: "health_ai_yes" }],
+        [{ text: "မဆက်လုပ်တော့ပါ", callback_data: "health_ai_no" }]
+      ] } });
+  }
+
+  if (data === "health_ai_no" && session.step === "health_ai_consent") {
+    sessions.delete(chatId);
+    return bot.sendMessage(chatId, "AI သို့ မေးခွန်းမပို့ပါ။ ကျန်းမာရေးဗဟုသုတကို ဖတ်ရှုနိုင်သည် သို့မဟုတ် မြန်မာနိုင်ငံအတွင်းရှိပါက 7887 သို့ ဆက်သွယ်နိုင်ပါသည်။", mainMenu);
+  }
+
+  if (data === "health_ai_yes" && session.step === "health_ai_consent") {
     session.step = "health_question";
-    return bot.sendMessage(chatId, "မေးခွန်းကို ရေးပေးပါ။ အမည်၊ မှတ်ပုံတင်နံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။");
+    return bot.sendMessage(chatId, "မေးခွန်းကို ရေးပေးပါ။ အမည်၊ မှတ်ပုံတင်နံပါတ်၊ ဖုန်းနံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။");
   }
 
   if (data.startsWith("severity_") && session.step === "health_severity") {
