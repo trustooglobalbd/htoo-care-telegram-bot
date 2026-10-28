@@ -277,7 +277,25 @@ bot.on("message", async msg => {
   if (articles[text]) return bot.sendMessage(chatId, articles[text], mainMenu);
   if (text === "🎯 ကျန်းမာရေး Quiz ဖြေမယ်") return startQuizConsent(chatId);
   if (text === "🌍 ပြည်ပရောက် မြန်မာများအတွက်") {
-    return bot.sendMessage(chatId, "ပြည်ပရောက် မြန်မာနိုင်ငံသားများအတွက် အထူးကုတိုင်ပင်မှုအချက်အလက်ကို Trust Oo ထံမှ အတည်ပြုပါ။ ပြည်ပမှ ဖုန်းခေါ်ဆိုနိုင်မှုနှင့် ကုန်ကျစရိတ်ကို ကြိုတင်စစ်ဆေးပါ။", mainMenu);
+    const overseasMessage = [
+      "🌍 ပြည်ပရောက် မြန်မာနိုင်ငံသားများအတွက် ကျန်းမာရေးအကူအညီ",
+      "",
+      "အထူးကုဆရာဝန်နှင့် တိုင်ပင်ဆွေးနွေးရန် ဆက်သွယ်ရန်အချက်အလက် —",
+      "",
+      "📞 Phone: 09 442 111 110",
+      "💬 Viber: 09 442 111 110",
+      "✈️ Telegram: 09 442 111 110",
+      "",
+      "မြန်မာဘာသာဖြင့် ဆက်သွယ်မေးမြန်းနိုင်ပါသည်။ ပြည်ပမှ ဖုန်းခေါ်ဆိုခနှင့် ဝန်ဆောင်မှုရရှိနိုင်မှုကို ဆက်သွယ်မီ စစ်ဆေးပါ။",
+      "",
+      "🌍 Health support for Myanmar citizens living abroad",
+      "For specialist consultation, contact:",
+      "Phone: 09 442 111 110",
+      "Viber: 09 442 111 110",
+      "Telegram: 09 442 111 110",
+      "Please confirm international call charges and service availability before contacting."
+    ].join("\n");
+    return bot.sendMessage(chatId, overseasMessage, mainMenu);
   }
   if (text === "📞 7887 ကို ဖုန်းဆက်မယ်") {
     return bot.sendMessage(chatId, "မြန်မာနိုင်ငံအတွင်းမှ ကျန်းမာရေးတိုင်ပင်ရန် 7887 သို့ ဖုန်းဆက်နိုင်ပါသည်။ အရေးပေါ်အခြေအနေဖြစ်ပါက အနီးဆုံးအရေးပေါ်ကုသမှုကို ချက်ချင်းရယူပါ။", mainMenu);
