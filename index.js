@@ -11,6 +11,7 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const HEALTH_TAB = "HealthRecords";
 const QUIZ_TAB = "QuizResults";
+const DASHBOARD_TAB = "Dashboard";
 
 app.get("/", (_req, res) => res.status(200).send("Htoo Care Bot is running"));
 app.get("/health", (_req, res) => res.json({
@@ -72,6 +73,7 @@ async function ensureDataTabs() {
   const requests = [];
   if (!existing.has(HEALTH_TAB)) requests.push({ addSheet: { properties: { title: HEALTH_TAB } } });
   if (!existing.has(QUIZ_TAB)) requests.push({ addSheet: { properties: { title: QUIZ_TAB } } });
+  if (!existing.has(DASHBOARD_TAB)) requests.push({ addSheet: { properties: { title: DASHBOARD_TAB } } });
   if (requests.length) await sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { requests } });
 
   for (const [tab, headers] of [[HEALTH_TAB, healthHeaders], [QUIZ_TAB, quizHeaders]]) {
@@ -84,6 +86,25 @@ async function ensureDataTabs() {
         requestBody: { values: [headers] }
       });
     }
+  }
+
+  const dashboard = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: DASHBOARD_TAB + "!A1:B5"
+  }).catch(() => ({ data: { values: [] } }));
+  if (!dashboard.data.values || !dashboard.data.values.length) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: DASHBOARD_TAB + "!A1",
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [
+        ["Htoo Care Data Dashboard", "Value"],
+        ["Health questions saved (consented)", "=COUNTA(HealthRecords!B2:B)"],
+        ["Quiz attempts saved (consented)", "=COUNTA(QuizResults!B2:B)"],
+        ["Average quiz score (%)", "=IFERROR(AVERAGE(QuizResults!F2:F),0)"],
+        ["Last updated", "=NOW()"]
+      ] }
+    });
   }
   sheetsReady = true;
 }
