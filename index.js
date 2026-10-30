@@ -36,7 +36,6 @@ const LANGUAGES = {
     overseasContact: "Specialist Consultation for Myanmar people abroad:\n09 442 111 110 (Phone / Viber / Telegram)",
     disclaimer: "This is general health education, not a diagnosis or prescription."
 };
-
 function getText(session, key) {
   const lang = session.language || "my";
   return LANGUAGES[lang]?.[key] || LANGUAGES.my[key] || key;
