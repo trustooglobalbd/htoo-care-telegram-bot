@@ -2,23 +2,20 @@ const crypto = require("crypto");
 const express = require("express");
 const TelegramBot = require("node-telegram-bot-api");
 const { GoogleGenAI } = require("@google/genai");
-const { google } = require("googleapis");
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-const SHEET_ID = process.env.GOOGLE_SHEET_ID;
-const HEALTH_TAB = "HealthRecords";
-const QUIZ_TAB = "QuizResults";
-const DASHBOARD_TAB = "Dashboard";
+const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
+const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET;
 
 app.get("/", (_req, res) => res.status(200).send("Htoo Care Bot is running"));
 app.get("/health", (_req, res) => res.json({
   status: "ok",
   telegramConfigured: Boolean(TOKEN),
   geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
-  googleSheetsConfigured: Boolean(SHEET_ID && (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64))
+  googleSheetsConfigured: Boolean(APPS_SCRIPT_URL && APPS_SCRIPT_SECRET)
 }));
 app.listen(PORT, () => console.log("Web server running on " + PORT));
 
@@ -32,122 +29,69 @@ const ai = process.env.GEMINI_API_KEY
   : null;
 const bot = new TelegramBot(TOKEN, { polling: true });
 const sessions = new Map();
-let sheetsApi = null;
-let sheetsReady = false;
-
-const healthHeaders = ["Timestamp UTC", "Request ID", "Topic", "Question / Concern", "Duration", "Severity", "Consent"];
-const quizHeaders = ["Timestamp UTC", "Session ID", "Quiz Topic", "Score", "Total Questions", "Percentage", "Consent"];
-
-function parseServiceAccountCredentials() {
-  const b64 = process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64;
-  const rawValue = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  const raw = b64 && b64.trim()
-    ? Buffer.from(b64.trim(), "base64").toString("utf8")
-    : (rawValue || "").trim();
-  if (!raw) throw new Error("Missing Google service account credentials");
-  let credentials;
-  try { credentials = JSON.parse(raw); }
-  catch (_e) { throw new Error("Google service account credentials are not valid JSON"); }
-  if (!credentials || credentials.type !== "service_account" || !credentials.client_email || !credentials.private_key) {
-    throw new Error("Google service account JSON is missing required fields");
+async function postToAppsScript(payload) {
+  if (!APPS_SCRIPT_URL || !APPS_SCRIPT_SECRET) {
+    throw new Error("Google Apps Script environment variables are missing");
   }
-  return credentials;
-}
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/.test(APPS_SCRIPT_URL)) {
+    throw new Error("GOOGLE_APPS_SCRIPT_URL must be the deployed Apps Script /exec URL");
+  }
 
-async function getSheetsApi() {
-  if (sheetsApi) return sheetsApi;
-  if (!SHEET_ID) throw new Error("Missing GOOGLE_SHEET_ID");
-  const auth = new google.auth.GoogleAuth({
-    credentials: parseServiceAccountCredentials(),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"]
+  const response = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ ...payload, secret: APPS_SCRIPT_SECRET }),
+    redirect: "follow",
+    signal: AbortSignal.timeout(25000)
   });
-  sheetsApi = google.sheets({ version: "v4", auth });
-  return sheetsApi;
-}
 
-async function ensureDataTabs() {
-  if (sheetsReady) return;
-  const sheets = await getSheetsApi();
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
-  const existing = new Set((meta.data.sheets || []).map(s => s.properties.title));
-  const requests = [];
-  if (!existing.has(HEALTH_TAB)) requests.push({ addSheet: { properties: { title: HEALTH_TAB } } });
-  if (!existing.has(QUIZ_TAB)) requests.push({ addSheet: { properties: { title: QUIZ_TAB } } });
-  if (!existing.has(DASHBOARD_TAB)) requests.push({ addSheet: { properties: { title: DASHBOARD_TAB } } });
-  if (requests.length) await sheets.spreadsheets.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { requests } });
-
-  for (const [tab, headers] of [[HEALTH_TAB, healthHeaders], [QUIZ_TAB, quizHeaders]]) {
-    const check = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: tab + "!A1:G1" }).catch(() => ({ data: { values: [] } }));
-    if (!check.data.values || !check.data.values.length) {
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: SHEET_ID,
-        range: tab + "!A1",
-        valueInputOption: "RAW",
-        requestBody: { values: [headers] }
-      });
-    }
+  if (!response.ok) {
+    throw new Error("Apps Script HTTP status: " + response.status);
   }
 
-  const dashboard = await sheets.spreadsheets.values.get({
-    spreadsheetId: SHEET_ID,
-    range: DASHBOARD_TAB + "!A1:B5"
-  }).catch(() => ({ data: { values: [] } }));
-  if (!dashboard.data.values || !dashboard.data.values.length) {
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: SHEET_ID,
-      range: DASHBOARD_TAB + "!A1",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: [
-        ["Htoo Care Data Dashboard", "Value"],
-        ["Health questions saved (consented)", "=COUNTA(HealthRecords!B2:B)"],
-        ["Quiz attempts saved (consented)", "=COUNTA(QuizResults!B2:B)"],
-        ["Average quiz score (%)", "=IFERROR(AVERAGE(QuizResults!F2:F),0)"],
-        ["Last updated", "=NOW()"]
-      ] }
-    });
+  let result;
+  try {
+    result = await response.json();
+  } catch (_error) {
+    throw new Error("Apps Script returned an unreadable response");
   }
-  sheetsReady = true;
-}
 
-async function appendRow(tab, row) {
-  await ensureDataTabs();
-  const sheets = await getSheetsApi();
-  const response = await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: tab + "!A:G",
-    valueInputOption: "RAW",
-    insertDataOption: "INSERT_ROWS",
-    requestBody: { values: [row] }
-  });
-  const updates = response.data && response.data.updates;
-  if (!updates || Number(updates.updatedRows) < 1) throw new Error("Google Sheets did not confirm the row write");
-  console.log("Google Sheets row saved:", tab, updates.updatedRange || "range unavailable");
-  return updates.updatedRange;
+  if (!result || result.success !== true || !result.range) {
+    throw new Error((result && result.error) || "Google Sheets did not confirm the save");
+  }
+
+  console.log("Google Sheets save confirmed:", result.type, result.range);
+  return result.range;
 }
 
 async function saveHealthRecord(session) {
-  return appendRow(HEALTH_TAB, [
-    new Date().toISOString(),
-    crypto.randomUUID(),
-    session.topic || "General health",
-    session.question || "",
-    session.duration || "",
-    session.severity || "",
-    "yes"
-  ]);
+  if (!session || !session.question || !session.topic) {
+    throw new Error("Health record is incomplete");
+  }
+  return postToAppsScript({
+    type: "health",
+    requestId: crypto.randomUUID(),
+    topic: session.topic,
+    question: session.question,
+    duration: session.duration || "",
+    severity: session.severity || "",
+    consent: true
+  });
 }
 
 async function saveQuizRecord(session) {
-  const percent = Math.round((session.score / session.questions.length) * 100);
-  return appendRow(QUIZ_TAB, [
-    new Date().toISOString(),
-    session.sessionId,
-    session.quizTopic,
-    session.score,
-    session.questions.length,
-    percent,
-    "yes"
-  ]);
+  if (!session || !Array.isArray(session.questions) || !session.questions.length) {
+    throw new Error("Quiz session is incomplete");
+  }
+  return postToAppsScript({
+    type: "quiz",
+    sessionId: session.sessionId,
+    quizTopic: session.quizTopic || "Mixed health education",
+    score: session.score,
+    totalQuestions: session.questions.length,
+    percentage: Math.round((session.score / session.questions.length) * 100),
+    consent: true
+  });
 }
 
 const mainMenu = {
