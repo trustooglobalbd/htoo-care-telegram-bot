@@ -35,19 +35,6 @@ const LANGUAGES = {
     contact: "If you are in Myanmar, call 7887.",
     overseasContact: "Specialist Consultation for Myanmar people abroad:\n09 442 111 110 (Phone / Viber / Telegram)",
     disclaimer: "This is general health education, not a diagnosis or prescription."
-  },
-  th: {
-    welcome: "ยินดีต้อนรับสู่ Htoo Care",
-    chooseLanguage: "กรุณาเลือกภาษา",
-    health: "🩺 ข้อมูลสุขภาพ",
-    specialist: "🌍 ปรึกษาแพทย์เฉพาะทาง",
-    location: "ขณะนี้คุณอยู่ที่ใด?",
-    myanmar: "🇲🇲 อยู่ในประเทศเมียนมา",
-    overseas: "🌏 ชาวเมียนมาที่อยู่ต่างประเทศ",
-    contact: "หากอยู่ในเมียนมา โทร 7887",
-    overseasContact: "ปรึกษาแพทย์เฉพาะทางสำหรับชาวเมียนมาในต่างประเทศ:\n09 442 111 110 (Phone / Viber / Telegram)",
-    disclaimer: "ข้อมูลนี้เป็นความรู้สุขภาพทั่วไป ไม่ใช่การวินิจฉัยหรือสั่งยา"
-  }
 };
 
 function getText(session, key) {
