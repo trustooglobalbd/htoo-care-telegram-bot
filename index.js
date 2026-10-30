@@ -10,6 +10,187 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
 const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
 const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET;
 
+const LANGUAGES = {
+  my: {
+    welcome: "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။",
+    chooseLanguage: "ဘာသာစကား ရွေးချယ်ပါ။",
+    health: "🩺 ကျန်းမာရေးအချက်အလက်",
+    specialist: "🌍 Specialist Consultation",
+    location: "သင်ဘယ်နေရာမှာ ရှိပါသလဲ။",
+    myanmar: "🇲🇲 မြန်မာနိုင်ငံအတွင်း",
+    overseas: "🌏 ပြည်ပရောက် မြန်မာ",
+    contact: "မြန်မာနိုင်ငံအတွင်းရှိပါက 7887 သို့ ဖုန်းခေါ်ဆိုနိုင်ပါသည်။",
+    overseasContact: "ပြည်ပရောက် မြန်မာများအတွက် Specialist Consultation:\n09 442 111 110 (Phone / Viber / Telegram)",
+    disclaimer: "ဤအချက်အလက်သည် ကျန်းမာရေးပညာပေးရန်သာ ဖြစ်ပြီး ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မပြုပါ။"
+  },
+  en: {
+    welcome: "Welcome to Htoo Care.",
+    chooseLanguage: "Choose your language.",
+    health: "🩺 Health Information",
+    specialist: "🌍 Specialist Consultation",
+    location: "Where are you currently located?",
+    myanmar: "🇲🇲 Inside Myanmar",
+    overseas: "🌏 Myanmar citizen abroad",
+    contact: "If you are in Myanmar, call 7887.",
+    overseasContact: "Specialist Consultation for Myanmar people abroad:\n09 442 111 110 (Phone / Viber / Telegram)",
+    disclaimer: "This is general health education, not a diagnosis or prescription."
+  },
+  th: {
+    welcome: "ยินดีต้อนรับสู่ Htoo Care",
+    chooseLanguage: "กรุณาเลือกภาษา",
+    health: "🩺 ข้อมูลสุขภาพ",
+    specialist: "🌍 ปรึกษาแพทย์เฉพาะทาง",
+    location: "ขณะนี้คุณอยู่ที่ใด?",
+    myanmar: "🇲🇲 อยู่ในประเทศเมียนมา",
+    overseas: "🌏 ชาวเมียนมาที่อยู่ต่างประเทศ",
+    contact: "หากอยู่ในเมียนมา โทร 7887",
+    overseasContact: "ปรึกษาแพทย์เฉพาะทางสำหรับชาวเมียนมาในต่างประเทศ:\n09 442 111 110 (Phone / Viber / Telegram)",
+    disclaimer: "ข้อมูลนี้เป็นความรู้สุขภาพทั่วไป ไม่ใช่การวินิจฉัยหรือสั่งยา"
+  }
+};
+
+function getText(session, key) {
+  const lang = session.language || "my";
+  return LANGUAGES[lang]?.[key] || LANGUAGES.my[key] || key;
+}
+function getConsultationContact(session) {
+  if (session.audience === "overseas") {
+    return getText(session, "overseasContact");
+  }
+
+  return getText(session, "contact");
+}
+function showLanguageSelection(chatId) {
+  return bot.sendMessage(
+    chatId,
+    "Choose your language / ဘာသာစကားရွေးချယ်ပါ / กรุณาเลือกภาษา",
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🇲🇲 မြန်မာ", callback_data: "language_my" }],
+          [{ text: "🇬🇧 English", callback_data: "language_en" }],
+          [{ text: "🇹🇭 ภาษาไทย", callback_data: "language_th" }]
+        ]
+      }
+    }
+  );
+}
+function showAudienceSelection(chatId, session) {
+  return bot.sendMessage(chatId, getText(session, "location"), {
+    reply_markup: {
+      inline_keyboard: [
+        [{
+          text: getText(session, "myanmar"),
+          callback_data: "audience_myanmar"
+        }],
+        [{
+          text: getText(session, "overseas"),
+          callback_data: "audience_overseas"
+        }]
+      ]
+    }
+  });
+}
+function getConsultationContact(session) {
+  if (session.audience === "overseas") {
+    return getText(session, "overseasContact");
+  }
+
+  return getText(session, "contact");
+}
+async function getHealthAIAnswer(question, session) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL;
+
+  if (!apiKey || !model) {
+    return getText(session, "disclaimer");
+  }
+
+  const languageNames = {
+    my: "Burmese",
+    en: "English",
+    th: "Thai"
+  };
+
+  const prompt = `
+You are Htoo Care's health education assistant.
+
+Answer in ${languageNames[session.language] || "Burmese"}.
+
+Rules:
+- Provide general health education only.
+- Do not diagnose diseases.
+- Do not prescribe medication.
+- Do not replace a qualified doctor.
+- For emergency symptoms, advise immediate medical care.
+- Use simple, respectful language.
+
+User question:
+${question}
+`;
+
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 700
+      }
+    }),
+    signal: AbortSignal.timeout(30000)
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "AI request failed");
+  }
+
+  return (data.candidates || [])
+    .flatMap(item => item.content?.parts || [])
+    .map(item => item.text || "")
+    .join("\n")
+    .trim();
+}
+bot.on("callback_query", async (query) => {
+  const chatId = query.message.chat.id;
+  const data = query.data;
+
+  let session = sessions.get(chatId) || { language: "my" };
+
+  await bot.answerCallbackQuery(query.id);
+
+  if (data.startsWith("language_")) {
+    session.language = data.replace("language_", "");
+    sessions.set(chatId, session);
+
+    return bot.sendMessage(
+      chatId,
+      getText(session, "welcome")
+    );
+  }
+
+  if (data === "audience_myanmar") {
+    session.audience = "myanmar";
+    sessions.set(chatId, session);
+
+    return bot.sendMessage(chatId, getText(session, "contact"));
+  }
+
+  if (data === "audience_overseas") {
+    session.audience = "overseas";
+    sessions.set(chatId, session);
+
+    return bot.sendMessage(chatId, getText(session, "overseasContact"));
+  }
+});
 app.get("/", (_req, res) => res.status(200).send("Htoo Care Bot is running"));
 app.get("/health", (_req, res) => res.json({
   status: "ok",
