@@ -34,8 +34,10 @@ const LANGUAGES = {
     overseas: "🌏 Myanmar citizen abroad",
     contact: "If you are in Myanmar, call 7887.",
     overseasContact: "Specialist Consultation for Myanmar people abroad:\n09 442 111 110 (Phone / Viber / Telegram)",
-    disclaimer: "This is general health education, not a diagnosis or prescription."
-}
+       disclaimer: "This is general health education, not a diagnosis or prescription."
+  }
+};
+
 function getText(session, key) {
   const lang = session.language || "my";
   return LANGUAGES[lang]?.[key] || LANGUAGES.my[key] || key;
