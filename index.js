@@ -300,53 +300,6 @@ function getGeminiFailureMessage(error) {
   return "The health assistant is temporarily unavailable. Please try again later or contact a qualified healthcare professional.";
 }
 
-async function getGeminiHealthAnswer(session) {
-  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
-    throw new Error("GEMINI_API_KEY is not configured");
-  }
-
-  if (!ai) {
-    throw new Error("Gemini client is not initialized");
-  }
-
-  const prompt = buildGeminiHealthPrompt(session);
-  let timeoutId;
-
-  try {
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: prompt
-      }),
-      new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(new Error("Gemini request timed out after 30 seconds"));
-        }, 30000);
-      })
-    ]);
-
-    const answer = extractGeminiText(response);
-
-    if (!answer || !answer.trim()) {
-      throw new Error("Gemini returned an empty response");
-    }
-
-    return answer.trim();
-  } catch (error) {
-    console.error("Gemini request failed:", {
-      model: GEMINI_MODEL,
-      message: error && error.message,
-      status: error && error.status,
-      name: error && error.name
-    });
-    throw error;
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-  }
-}
-
 const articles = {
   "🌞 အပူဒဏ်ကာကွယ်ရေး": "အပူပြင်းချိန်တွင် ရေကို ပုံမှန်သောက်ပါ၊ အရိပ်ရပြီ အရိပ်ရပါ။ အပူဒဏ်သက်ရောက်မှုကို တိုးနည်းအောင် တင်းကျပ်တဲ့ အဝတ်အစား ဝတ်ဆင်ပါ။",
   "🥗 အာဟာရနှင့် ကျန်းမာရေး": "အာဟာရမျှတစေရန် အစားအစာအမျိုးမျိုးကို သင့်တော်တဲ့ အရည်အချင်းဖြင့် စားသုံးပါ။",
@@ -844,11 +797,13 @@ async function getGeminiHealthAnswer(session) {
   );
 
   let timeoutId;
+  const startedAt = Date.now();
 
   try {
     console.log("Gemini request started:", {
       model: GEMINI_MODEL,
-      timeoutSeconds: timeoutMs / 1000
+      timeoutSeconds: timeoutMs / 1000,
+      time: new Date().toISOString()
     });
 
     const response = await Promise.race([
@@ -859,11 +814,12 @@ async function getGeminiHealthAnswer(session) {
 
       new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
-          reject(
-            new Error(
-              `Gemini request timed out after ${timeoutMs / 1000} seconds`
-            )
+          const error = new Error(
+            `Gemini request timed out after ${timeoutMs / 1000} seconds`
           );
+
+          error.code = "GEMINI_LOCAL_TIMEOUT";
+          reject(error);
         }, timeoutMs);
       })
     ]);
@@ -874,16 +830,22 @@ async function getGeminiHealthAnswer(session) {
       throw new Error("Gemini returned an empty response");
     }
 
-    console.log("Gemini response received successfully.");
+    console.log("Gemini response received successfully:", {
+      model: GEMINI_MODEL,
+      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
+    });
 
     return answer.trim();
 
   } catch (error) {
     console.error("Gemini request failed:", {
       model: GEMINI_MODEL,
+      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
       message: error?.message,
+      name: error?.name,
       status: error?.status,
-      name: error?.name
+      code: error?.code,
+      cause: error?.cause?.message
     });
 
     throw error;
