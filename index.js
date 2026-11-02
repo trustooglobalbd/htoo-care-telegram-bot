@@ -440,6 +440,62 @@ function shuffle(items) {
   return arr;
 }
 
+async function getGeminiHealthAnswer(session) {
+  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  if (!ai) {
+    throw new Error("Gemini client is not initialized");
+  }
+
+  const prompt = buildGeminiHealthPrompt(session);
+  let timeoutId;
+
+  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS) || 60000;
+
+  try {
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt
+      }),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              `Gemini request timed out after ${timeoutMs / 1000} seconds`
+            )
+          );
+        }, timeoutMs);
+      })
+    ]);
+
+    const answer = extractGeminiText(response);
+
+    if (!answer || !answer.trim()) {
+      throw new Error("Gemini returned an empty response");
+    }
+
+    return answer.trim();
+
+  } catch (error) {
+    console.error("Gemini request failed:", {
+      model: GEMINI_MODEL,
+      message: error && error.message,
+      status: error && error.status,
+      name: error && error.name
+    });
+
+    throw error;
+
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function sendQuizQuestion(chatId, session) {
   const q = session.questions[session.index];
   const keyboard = q.options.map((option, i) => [
