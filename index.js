@@ -827,6 +827,74 @@ bot.on("callback_query", async query => {
     );
   }
 
+async function getGeminiHealthAnswer(session) {
+  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  if (!ai) {
+    throw new Error("Gemini client is not initialized");
+  }
+
+  const prompt = buildGeminiHealthPrompt(session);
+
+  const timeoutMs = Math.max(
+    30000,
+    Number(process.env.GEMINI_TIMEOUT_MS) || 90000
+  );
+
+  let timeoutId;
+
+  try {
+    console.log("Gemini request started:", {
+      model: GEMINI_MODEL,
+      timeoutSeconds: timeoutMs / 1000
+    });
+
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt
+      }),
+
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              `Gemini request timed out after ${timeoutMs / 1000} seconds`
+            )
+          );
+        }, timeoutMs);
+      })
+    ]);
+
+    const answer = extractGeminiText(response);
+
+    if (!answer || !answer.trim()) {
+      throw new Error("Gemini returned an empty response");
+    }
+
+    console.log("Gemini response received successfully.");
+
+    return answer.trim();
+
+  } catch (error) {
+    console.error("Gemini request failed:", {
+      model: GEMINI_MODEL,
+      message: error?.message,
+      status: error?.status,
+      name: error?.name
+    });
+
+    throw error;
+
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
   if (data === "health_save_yes" && session.step === "health_consent") {
     try {
       const range = await saveHealthRecord(session);
