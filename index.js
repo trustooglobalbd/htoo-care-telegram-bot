@@ -403,6 +403,68 @@ async function getGeminiHealthAnswer(session) {
   }
 
   const prompt = buildGeminiHealthPrompt(session);
+
+  const timeoutMs = Math.max(
+    30000,
+    Number(process.env.GEMINI_TIMEOUT_MS) || 90000
+  );
+
+  const startedAt = Date.now();
+
+  try {
+    console.log("Gemini request started:", {
+      model: GEMINI_MODEL,
+      timeoutSeconds: timeoutMs / 1000,
+      time: new Date().toISOString()
+    });
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
+      config: {
+        httpOptions: {
+          timeout: timeoutMs
+        }
+      }
+    });
+
+    const answer = extractGeminiText(response);
+
+    if (!answer || !answer.trim()) {
+      throw new Error("Gemini returned an empty response");
+    }
+
+    console.log("Gemini response received successfully:", {
+      model: GEMINI_MODEL,
+      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
+    });
+
+    return answer.trim();
+
+  } catch (error) {
+    console.error("Gemini request failed:", {
+      model: GEMINI_MODEL,
+      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+      message: error?.message,
+      name: error?.name,
+      status: error?.status,
+      code: error?.code,
+      cause: error?.cause?.message
+    });
+
+    throw error;
+  }
+}
+async function getGeminiHealthAnswer(session) {
+  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  if (!ai) {
+    throw new Error("Gemini client is not initialized");
+  }
+
+  const prompt = buildGeminiHealthPrompt(session);
   let timeoutId;
 
   const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS) || 60000;
