@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 8080;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 const GEMINI_MODEL = (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL).trim();
+const OPENAI_MODEL = (process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
+const OPENAI_API_URL = "https://api.openai.com/v1/responses";
 const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
 const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET;
 
@@ -92,6 +94,7 @@ app.get("/health", (_req, res) => {
     status: "ok",
     telegramConfigured: Boolean(TOKEN),
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()),
+    backupAIConfigured: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()),
     googleSheetsConfigured: Boolean(APPS_SCRIPT_URL && APPS_SCRIPT_SECRET)
   });
 });
@@ -393,74 +396,69 @@ function shuffle(items) {
   return arr;
 }
 
-const aiResult = await getHealthAnswer(session);
-
-let answer = aiResult.answer;
-
-console.log("Health answer provider:", aiResult.provider);
-
 async function getGeminiHealthAnswer(session) {
-  if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
-    throw new Error("GEMINI_API_KEY is not configured");
-  }
-
-  if (!ai) {
-    throw new Error("Gemini client is not initialized");
-  }
+  if (!ai) throw new Error("Gemini API key is missing or Gemini client is not initialized");
 
   const prompt = buildGeminiHealthPrompt(session);
-
-  // Allow a longer client-side wait, while reducing Gemini 3.8 Flash thinking
-  // to LOW to help routine health-education answers return sooner.
-  const timeoutMs = Math.max(
-    30000,
-    Number(process.env.GEMINI_TIMEOUT_MS) || 300000
-  );
+  const timeoutMs = Math.max(30000, Number(process.env.GEMINI_TIMEOUT_MS) || 90000);
   const maxAttempts = 2;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const startedAt = Date.now();
-
     try {
       console.log("Gemini request started:", {
         model: GEMINI_MODEL,
         attempt,
         maxAttempts,
         timeoutSeconds: timeoutMs / 1000,
-        thinkingLevel: "LOW",
         time: new Date().toISOString()
       });
-const OPENAI_MODEL = (
-  process.env.OPENAI_MODEL || "gpt-5.4-mini"
-).trim();
 
-const OPENAI_API_URL =
-  "https://api.openai.com/v1/responses";
       const response = await ai.models.generateContent({
         model: GEMINI_MODEL,
         contents: prompt,
-        config: {
-          thinkingConfig: {
-            thinkingLevel: "LOW"
-          },
-          httpOptions: {
-            timeout: timeoutMs
-          }
-        }
+        config: { httpOptions: { timeout: timeoutMs } }
       });
+
+      const answer = extractGeminiText(response);
+      if (!answer) throw new Error("Gemini returned an empty response");
+
+      console.log("Gemini response received:", {
+        model: GEMINI_MODEL,
+        attempt,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
+      });
+      return answer.trim();
+    } catch (error) {
+      const message = String(error?.message || "");
+      const status = Number(error?.status || error?.code);
+      const temporary = status === 503 || status === 504 ||
+        /503|504|UNAVAILABLE|DEADLINE_EXCEEDED/i.test(message);
+
+      console.error("Gemini request failed:", {
+        model: GEMINI_MODEL,
+        attempt,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+        status: error?.status,
+        code: error?.code,
+        message
+      });
+
+      if (temporary && attempt < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Gemini request failed after retry");
+}
 
 async function getOpenAIHealthAnswer(session) {
   const apiKey = (process.env.OPENAI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
-  }
-
-  const timeoutMs = Math.max(
-    15000,
-    Number(process.env.OPENAI_TIMEOUT_MS) || 90000
-  );
-
+  const timeoutMs = Math.max(15000, Number(process.env.OPENAI_TIMEOUT_MS) || 90000);
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: {
@@ -472,14 +470,12 @@ async function getOpenAIHealthAnswer(session) {
       instructions: [
         "You are Htuu Care, a general health education assistant.",
         "Answer in the user's selected language: Burmese, English or Thai.",
-        "Use respectful, non-judgmental and evidence-based language.",
-        "Do not diagnose, prescribe medicines or dosages.",
-        "Do not replace qualified healthcare professionals.",
+        "Use respectful, non-judgmental, evidence-informed language.",
+        "Do not diagnose, prescribe medicines or dosages, or replace a qualified clinician.",
         "Do not invent facts or claim clinician review.",
         "For possible HIV exposure within 72 hours, advise urgent contact with a qualified health service to ask about PEP.",
         "For difficulty breathing, unconsciousness, severe chest pain, heavy bleeding or seizure, advise immediate emergency care.",
-        "Avoid asking for unnecessary personal information.",
-        "Structure the answer: General information, Safe next steps, When to seek professional or urgent care."
+        "Avoid requesting unnecessary personal information."
       ].join(" "),
       input: buildGeminiHealthPrompt(session),
       max_output_tokens: 800
@@ -489,150 +485,58 @@ async function getOpenAIHealthAnswer(session) {
 
   const raw = await response.text();
   let result;
-
   try {
     result = JSON.parse(raw);
-  } catch (error) {
-    throw new Error(
-      "OpenAI returned unreadable response: HTTP " + response.status
-    );
+  } catch (_error) {
+    throw new Error("OpenAI returned unreadable response (HTTP " + response.status + ")");
   }
 
   if (!response.ok) {
-    throw new Error(
-      "OpenAI API error " + response.status + ": " +
-      (result?.error?.message || "Unknown error")
-    );
+    throw new Error("OpenAI API error " + response.status + ": " +
+      (result?.error?.message || "Unknown error"));
   }
 
-  let answer = result.output_text || "";
-
+  let answer = typeof result.output_text === "string" ? result.output_text.trim() : "";
   if (!answer && Array.isArray(result.output)) {
     answer = result.output
-      .filter(item => item.type === "message")
+      .filter(item => item?.type === "message")
       .flatMap(item => item.content || [])
-      .filter(item => item.type === "output_text")
+      .filter(item => item?.type === "output_text")
       .map(item => item.text || "")
-      .join("\n");
+      .join("\n")
+      .trim();
   }
+  if (!answer) throw new Error("OpenAI returned an empty response");
 
-  if (!answer.trim()) {
-    throw new Error("OpenAI returned an empty response");
-  }
-
-  console.log("Backup AI response received:", {
-    provider: "OpenAI",
-    model: OPENAI_MODEL
-  });
-
-  return answer.trim();
+  console.log("Backup AI response received:", { provider: "OpenAI", model: OPENAI_MODEL });
+  return answer;
 }
 
 async function getHealthAnswer(session) {
-  let primaryError;
-
-  // 1. Try Gemini first
-  try {
-    const answer = await getGeminiHealthAnswer(session);
-
-    console.log("Selected AI Provider: Gemini");
-
-    return {
-      answer,
-      provider: "Gemini"
-    };
-  } catch (error) {
-    primaryError = error;
-
-    console.error("Gemini failed. Trying Backup AI:", {
-      message: error.message
-    });
-  }
-
-  // 2. Try OpenAI Backup
-  if (process.env.OPENAI_API_KEY) {
+  let geminiError;
+  if (ai) {
     try {
-      const answer = await getOpenAIHealthAnswer(session);
-
-      console.log("Selected AI Provider: OpenAI Backup");
-
-      return {
-        answer,
-        provider: "OpenAI"
-      };
-    } catch (backupError) {
-      console.error("OpenAI Backup failed:", {
-        message: backupError.message
-      });
-
-      const error = new Error(
-        "Both Gemini and OpenAI failed."
-      );
-
-      error.provider = "both";
-      throw error;
-    }
-  }
-
-  // 3. Backup key not configured
-  const error = new Error(
-    "Gemini failed and OpenAI Backup is not configured."
-  );
-
-  error.provider = "gemini_only";
-  throw error;
-}
-
-      const answer = extractGeminiText(response);
-
-      if (!answer || !answer.trim()) {
-        throw new Error("Gemini returned an empty response");
-      }
-
-      console.log("Gemini response received successfully:", {
-        model: GEMINI_MODEL,
-        attempt,
-        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
-      });
-
-      return answer.trim();
-
+      const answer = await getGeminiHealthAnswer(session);
+      console.log("Health answer provider selected: Gemini");
+      return { answer, provider: "Gemini" };
     } catch (error) {
-      const message = String(error?.message || "");
-      const status = Number(error?.status || error?.code);
-      const isDeadlineError =
-        status === 504 ||
-        status === 503 ||
-        message.includes("504") ||
-        message.includes("503") ||
-        message.includes("DEADLINE_EXCEEDED") ||
-        message.includes("UNAVAILABLE");
-
-      console.error("Gemini request failed:", {
-        model: GEMINI_MODEL,
-        attempt,
-        maxAttempts,
-        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
-        message,
-        name: error?.name,
-        status: error?.status,
-        code: error?.code,
-        cause: error?.cause?.message
-      });
-
-      // Retry only once for temporary deadline/service errors.
-      if (isDeadlineError && attempt < maxAttempts) {
-        console.log("Retrying Gemini request once after a short delay.");
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        continue;
-      }
-
-      throw error;
+      geminiError = error;
+      console.error("Gemini primary failed; trying backup:", error?.message || error);
     }
+  } else {
+    geminiError = new Error("Gemini is not configured");
   }
 
-  throw new Error("Gemini request failed after retry");
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) {
+    const answer = await getOpenAIHealthAnswer(session);
+    console.log("Health answer provider selected: OpenAI backup");
+    return { answer, provider: "OpenAI" };
+  }
+
+  throw new Error("Gemini failed and OPENAI_API_KEY is not configured: " +
+    (geminiError?.message || "Unknown Gemini error"));
 }
+
 function sendQuizQuestion(chatId, session) {
   const q = session.questions[session.index];
   const keyboard = q.options.map((option, i) => [
@@ -916,15 +820,17 @@ bot.on("callback_query", async query => {
     try {
       await bot.sendMessage(chatId, "အထွေထွေကျန်းမာရေးအချက်အလက်ကို ပြင်ဆင်နေပါတယ်။");
 
-      let answer = await getGeminiHealthAnswer(session);
+      const aiResult = await getHealthAnswer(session);
+      let answer = aiResult.answer;
+      console.log("Health answer provider:", aiResult.provider);
 
       answer += "\n\n" + getConsultationContact(session);
       answer += "\n\n" + getText(session, "disclaimer");
 
       await sendLongMessage(chatId, answer);
     } catch (error) {
-      const friendlyMessage = getGeminiFailureMessage(error);
-      console.error("Gemini response failed:", { message: error && error.message, model: GEMINI_MODEL });
+      const friendlyMessage = "AI ဝန်ဆောင်မှုများ ယာယီအသုံးမပြုနိုင်သေးပါ။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။";
+      console.error("AI provider failed:", { message: error && error.message, geminiModel: GEMINI_MODEL, backupModel: OPENAI_MODEL });
 
       await bot.sendMessage(
         chatId,
