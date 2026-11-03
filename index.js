@@ -393,6 +393,12 @@ function shuffle(items) {
   return arr;
 }
 
+const aiResult = await getHealthAnswer(session);
+
+let answer = aiResult.answer;
+
+console.log("Health answer provider:", aiResult.provider);
+
 async function getGeminiHealthAnswer(session) {
   if (!process.env.GEMINI_API_KEY || !process.env.GEMINI_API_KEY.trim()) {
     throw new Error("GEMINI_API_KEY is not configured");
