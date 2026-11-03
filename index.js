@@ -453,7 +453,10 @@ async function getGeminiHealthAnswer(session) {
   }
   throw new Error("Gemini request failed after retry");
 }
-
+console.log(
+  "OpenAI API Key configured:",
+  Boolean(process.env.OPENAI_API_KEY)
+);
 async function getOpenAIHealthAnswer(session) {
   const apiKey = (process.env.OPENAI_API_KEY || "").trim();
   if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
