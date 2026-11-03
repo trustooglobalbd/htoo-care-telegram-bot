@@ -404,56 +404,89 @@ async function getGeminiHealthAnswer(session) {
 
   const prompt = buildGeminiHealthPrompt(session);
 
+  // Allow a longer client-side wait, while reducing Gemini 3.8 Flash thinking
+  // to LOW to help routine health-education answers return sooner.
   const timeoutMs = Math.max(
     30000,
-    Number(process.env.GEMINI_TIMEOUT_MS) || 90000
+    Number(process.env.GEMINI_TIMEOUT_MS) || 300000
   );
+  const maxAttempts = 2;
 
-  const startedAt = Date.now();
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const startedAt = Date.now();
 
-  try {
-    console.log("Gemini request started:", {
-      model: GEMINI_MODEL,
-      timeoutSeconds: timeoutMs / 1000,
-      time: new Date().toISOString()
-    });
+    try {
+      console.log("Gemini request started:", {
+        model: GEMINI_MODEL,
+        attempt,
+        maxAttempts,
+        timeoutSeconds: timeoutMs / 1000,
+        thinkingLevel: "LOW",
+        time: new Date().toISOString()
+      });
 
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: prompt,
-      config: {
-        httpOptions: {
-          timeout: timeoutMs
+      const response = await ai.models.generateContent({
+        model: GEMINI_MODEL,
+        contents: prompt,
+        config: {
+          thinkingConfig: {
+            thinkingLevel: "LOW"
+          },
+          httpOptions: {
+            timeout: timeoutMs
+          }
         }
+      });
+
+      const answer = extractGeminiText(response);
+
+      if (!answer || !answer.trim()) {
+        throw new Error("Gemini returned an empty response");
       }
-    });
 
-    const answer = extractGeminiText(response);
+      console.log("Gemini response received successfully:", {
+        model: GEMINI_MODEL,
+        attempt,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
+      });
 
-    if (!answer || !answer.trim()) {
-      throw new Error("Gemini returned an empty response");
+      return answer.trim();
+
+    } catch (error) {
+      const message = String(error?.message || "");
+      const status = Number(error?.status || error?.code);
+      const isDeadlineError =
+        status === 504 ||
+        status === 503 ||
+        message.includes("504") ||
+        message.includes("503") ||
+        message.includes("DEADLINE_EXCEEDED") ||
+        message.includes("UNAVAILABLE");
+
+      console.error("Gemini request failed:", {
+        model: GEMINI_MODEL,
+        attempt,
+        maxAttempts,
+        elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
+        message,
+        name: error?.name,
+        status: error?.status,
+        code: error?.code,
+        cause: error?.cause?.message
+      });
+
+      // Retry only once for temporary deadline/service errors.
+      if (isDeadlineError && attempt < maxAttempts) {
+        console.log("Retrying Gemini request once after a short delay.");
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+
+      throw error;
     }
-
-    console.log("Gemini response received successfully:", {
-      model: GEMINI_MODEL,
-      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000)
-    });
-
-    return answer.trim();
-
-  } catch (error) {
-    console.error("Gemini request failed:", {
-      model: GEMINI_MODEL,
-      elapsedSeconds: Math.round((Date.now() - startedAt) / 1000),
-      message: error?.message,
-      name: error?.name,
-      status: error?.status,
-      code: error?.code,
-      cause: error?.cause?.message
-    });
-
-    throw error;
   }
+
+  throw new Error("Gemini request failed after retry");
 }
 function sendQuizQuestion(chatId, session) {
   const q = session.questions[session.index];
