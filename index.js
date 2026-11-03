@@ -13,7 +13,7 @@ const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET;
 
 const LANGUAGES = {
   my: {
-    welcome: "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။",
+    welcome: "မင်္ဂလာပါ။ Htuu Care မှ ကြိုဆိုပါတယ်။",
     chooseLanguage: "ဘာသာစကား ရွေးချယ်ပါ။",
     health: "🩺 ကျန်းမာရေးအချက်အလက်",
     specialist: "🌍 Specialist Consultation",
@@ -25,7 +25,7 @@ const LANGUAGES = {
     disclaimer: "ဤအချက်အလက်သည် ကျန်းမာရေးပညာပေးရန်သာ ဖြစ်ပြီး ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မပြုပါ။"
   },
   en: {
-    welcome: "Welcome to Htoo Care.",
+    welcome: "Welcome to Htuu Care.",
     chooseLanguage: "Choose your language.",
     health: "🩺 Health Information",
     specialist: "🌍 Specialist Consultation",
@@ -207,7 +207,7 @@ function showMenu(chatId) {
 
   return bot.sendMessage(
     chatId,
-    "မင်္ဂလာပါ။ Htoo Care မှ ကြိုဆိုပါတယ်။\n\nဝန်ဆောင်မှုတစ်ခုကို ရွေးချယ်ပါ။",
+    "မင်္ဂလာပါ။ Htuu Care မှ ကြိုဆိုပါတယ်။\n\nဝန်ဆောင်မှုတစ်ခုကို ရွေးချယ်ပါ။",
     mainMenu
   );
 }
@@ -256,7 +256,7 @@ function extractGeminiText(response) {
 
 function buildGeminiHealthPrompt(session) {
   return [
-    "You are Htoo Care, a general health education assistant.",
+    "You are Htuu Care, a general health education assistant.",
     "Answer in the user's selected language: " +
       ({ my: "Burmese", en: "English", th: "Thai" }[session.language || "my"]) +
       ". Use clear, respectful language. For sexual and reproductive health (SRHR), menstruation, contraception, pregnancy, sexually transmitted infections (STIs) and HIV, use non-judgmental, stigma-free, evidence-based education.",
