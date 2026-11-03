@@ -522,6 +522,61 @@ async function getOpenAIHealthAnswer(session) {
   return answer.trim();
 }
 
+async function getHealthAnswer(session) {
+  let primaryError;
+
+  // 1. Try Gemini first
+  try {
+    const answer = await getGeminiHealthAnswer(session);
+
+    console.log("Selected AI Provider: Gemini");
+
+    return {
+      answer,
+      provider: "Gemini"
+    };
+  } catch (error) {
+    primaryError = error;
+
+    console.error("Gemini failed. Trying Backup AI:", {
+      message: error.message
+    });
+  }
+
+  // 2. Try OpenAI Backup
+  if (process.env.OPENAI_API_KEY) {
+    try {
+      const answer = await getOpenAIHealthAnswer(session);
+
+      console.log("Selected AI Provider: OpenAI Backup");
+
+      return {
+        answer,
+        provider: "OpenAI"
+      };
+    } catch (backupError) {
+      console.error("OpenAI Backup failed:", {
+        message: backupError.message
+      });
+
+      const error = new Error(
+        "Both Gemini and OpenAI failed."
+      );
+
+      error.provider = "both";
+      throw error;
+    }
+  }
+
+  // 3. Backup key not configured
+  const error = new Error(
+    "Gemini failed and OpenAI Backup is not configured."
+  );
+
+  error.provider = "gemini_only";
+  throw error;
+}
+
       const answer = extractGeminiText(response);
 
       if (!answer || !answer.trim()) {
