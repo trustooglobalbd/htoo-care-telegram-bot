@@ -424,7 +424,12 @@ async function getGeminiHealthAnswer(session) {
         thinkingLevel: "LOW",
         time: new Date().toISOString()
       });
+const OPENAI_MODEL = (
+  process.env.OPENAI_MODEL || "gpt-5.4-mini"
+).trim();
 
+const OPENAI_API_URL =
+  "https://api.openai.com/v1/responses";
       const response = await ai.models.generateContent({
         model: GEMINI_MODEL,
         contents: prompt,
@@ -437,6 +442,85 @@ async function getGeminiHealthAnswer(session) {
           }
         }
       });
+
+async function getOpenAIHealthAnswer(session) {
+  const apiKey = (process.env.OPENAI_API_KEY || "").trim();
+
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured");
+  }
+
+  const timeoutMs = Math.max(
+    15000,
+    Number(process.env.OPENAI_TIMEOUT_MS) || 90000
+  );
+
+  const response = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + apiKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      instructions: [
+        "You are Htuu Care, a general health education assistant.",
+        "Answer in the user's selected language: Burmese, English or Thai.",
+        "Use respectful, non-judgmental and evidence-based language.",
+        "Do not diagnose, prescribe medicines or dosages.",
+        "Do not replace qualified healthcare professionals.",
+        "Do not invent facts or claim clinician review.",
+        "For possible HIV exposure within 72 hours, advise urgent contact with a qualified health service to ask about PEP.",
+        "For difficulty breathing, unconsciousness, severe chest pain, heavy bleeding or seizure, advise immediate emergency care.",
+        "Avoid asking for unnecessary personal information.",
+        "Structure the answer: General information, Safe next steps, When to seek professional or urgent care."
+      ].join(" "),
+      input: buildGeminiHealthPrompt(session),
+      max_output_tokens: 800
+    }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+
+  const raw = await response.text();
+  let result;
+
+  try {
+    result = JSON.parse(raw);
+  } catch (error) {
+    throw new Error(
+      "OpenAI returned unreadable response: HTTP " + response.status
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      "OpenAI API error " + response.status + ": " +
+      (result?.error?.message || "Unknown error")
+    );
+  }
+
+  let answer = result.output_text || "";
+
+  if (!answer && Array.isArray(result.output)) {
+    answer = result.output
+      .filter(item => item.type === "message")
+      .flatMap(item => item.content || [])
+      .filter(item => item.type === "output_text")
+      .map(item => item.text || "")
+      .join("\n");
+  }
+
+  if (!answer.trim()) {
+    throw new Error("OpenAI returned an empty response");
+  }
+
+  console.log("Backup AI response received:", {
+    provider: "OpenAI",
+    model: OPENAI_MODEL
+  });
+
+  return answer.trim();
+}
 
       const answer = extractGeminiText(response);
 
