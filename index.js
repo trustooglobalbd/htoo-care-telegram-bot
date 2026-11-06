@@ -5,8 +5,8 @@ const TelegramBot = require("node-telegram-bot-api");
 const app = express();
 const PORT = process.env.PORT || 8080;
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
-const OPENAI_MODEL = (process.env.OPENAI_MODEL || "gpt-5.4-mini").trim();
-const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+const GEMINI_MODEL = "gemini-3.6-flash";
+const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models/";
 const APPS_SCRIPT_URL = process.env.GOOGLE_APPS_SCRIPT_URL;
 const APPS_SCRIPT_SECRET = process.env.GOOGLE_APPS_SCRIPT_SECRET;
 
@@ -90,8 +90,8 @@ app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     telegramConfigured: Boolean(TOKEN),
-    openaiConfigured: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()),
-    openaiModel: OPENAI_MODEL,
+    geminiConfigured: Boolean(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim()),
+    geminiModel: GEMINI_MODEL,
     googleSheetsConfigured: Boolean(APPS_SCRIPT_URL && APPS_SCRIPT_SECRET)
   });
 });
@@ -105,8 +105,8 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-console.log("OpenAI configuration:", process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() ? "present" : "missing");
-console.log("OpenAI model:", OPENAI_MODEL);
+console.log("Gemini configuration:", process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() ? "present" : "missing");
+console.log("Gemini model:", GEMINI_MODEL);
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 const sessions = new Map();
@@ -329,35 +329,30 @@ function shuffle(items) {
   return arr;
 }
 
-console.log(
-  "OpenAI API Key configured:",
-  Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim())
-);
-async function getOpenAIHealthAnswer(session) {
-  const apiKey = (process.env.OPENAI_API_KEY || "").trim();
-  if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
+async function getGeminiHealthAnswer(session) {
+  const apiKey = (process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
-  const timeoutMs = Math.max(15000, Number(process.env.OPENAI_TIMEOUT_MS) || 90000);
-  const response = await fetch(OPENAI_API_URL, {
+  const timeoutMs = 60000;
+  const endpoint = GEMINI_API_BASE + GEMINI_MODEL + ":generateContent?key=" + encodeURIComponent(apiKey);
+  const systemInstruction = [
+    "You are Htuu Care, a general health education assistant.",
+    "Answer in the user's selected language: Burmese, English or Thai.",
+    "Use respectful, non-judgmental, evidence-informed language.",
+    "Do not diagnose, prescribe medicines or dosages, or replace a qualified clinician.",
+    "Do not invent facts or claim clinician review.",
+    "For possible HIV exposure within 72 hours, advise urgent contact with a qualified health service to ask about PEP.",
+    "For difficulty breathing, unconsciousness, severe chest pain, heavy bleeding or seizure, advise immediate emergency care.",
+    "Avoid requesting unnecessary personal information."
+  ].join(" ");
+
+  const response = await fetch(endpoint, {
     method: "POST",
-    headers: {
-      "Authorization": "Bearer " + apiKey,
-      "Content-Type": "application/json"
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
-      instructions: [
-        "You are Htuu Care, a general health education assistant.",
-        "Answer in the user's selected language: Burmese, English or Thai.",
-        "Use respectful, non-judgmental, evidence-informed language.",
-        "Do not diagnose, prescribe medicines or dosages, or replace a qualified clinician.",
-        "Do not invent facts or claim clinician review.",
-        "For possible HIV exposure within 72 hours, advise urgent contact with a qualified health service to ask about PEP.",
-        "For difficulty breathing, unconsciousness, severe chest pain, heavy bleeding or seizure, advise immediate emergency care.",
-        "Avoid requesting unnecessary personal information."
-      ].join(" "),
-      input: buildHealthPrompt(session),
-      max_output_tokens: 800
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: "user", parts: [{ text: buildHealthPrompt(session) }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
     }),
     signal: AbortSignal.timeout(timeoutMs)
   });
@@ -367,34 +362,31 @@ async function getOpenAIHealthAnswer(session) {
   try {
     result = JSON.parse(raw);
   } catch (_error) {
-    throw new Error("OpenAI returned unreadable response (HTTP " + response.status + ")");
+    throw new Error("Gemini returned unreadable response (HTTP " + response.status + ")");
   }
 
   if (!response.ok) {
-    throw new Error("OpenAI API error " + response.status + ": " +
-      (result?.error?.message || "Unknown error"));
+    const detail = result?.error?.message || "Unknown error";
+    throw new Error("Gemini API error " + response.status + ": " + detail);
   }
 
-  let answer = typeof result.output_text === "string" ? result.output_text.trim() : "";
-  if (!answer && Array.isArray(result.output)) {
-    answer = result.output
-      .filter(item => item?.type === "message")
-      .flatMap(item => item.content || [])
-      .filter(item => item?.type === "output_text")
-      .map(item => item.text || "")
-      .join("\n")
-      .trim();
+  const candidate = result?.candidates?.[0];
+  const answer = Array.isArray(candidate?.content?.parts)
+    ? candidate.content.parts.map(part => part.text || "").join("\n").trim()
+    : "";
+  if (!answer) {
+    const reason = result?.promptFeedback?.blockReason || candidate?.finishReason || "empty response";
+    throw new Error("Gemini returned no usable answer: " + reason);
   }
-  if (!answer) throw new Error("OpenAI returned an empty response");
 
-  console.log("OpenAI response received:", { provider: "OpenAI", model: OPENAI_MODEL });
+  console.log("Gemini response received:", { provider: "Gemini", model: GEMINI_MODEL });
   return answer;
 }
 
 async function getHealthAnswer(session) {
-  const answer = await getOpenAIHealthAnswer(session);
-  console.log("Health answer provider selected: OpenAI");
-  return { answer, provider: "OpenAI" };
+  const answer = await getGeminiHealthAnswer(session);
+  console.log("Health answer provider selected: Gemini");
+  return { answer, provider: "Gemini" };
 }
 
 function sendQuizQuestion(chatId, session) {
@@ -663,7 +655,7 @@ bot.on("callback_query", async query => {
 
     return bot.sendMessage(
       chatId,
-      "ကိုယ်ရေးလုံခြုံမှု အသိပေးချက် — သင့်မေးခွန်းကို AI ဝန်ဆောင်မှုသို့ ပို့ပေးရမည်ဖြစ်ပြီး ကျန်းမာရေးပညာပေးအဖြစ်သာ အသုံးပြုမည်။",
+      "ကိုယ်ရေးလုံခြုံမှု အသိပေးချက် — သင့်မေးခွန်းကို Google Gemini Free API သို့ ပို့ပေးမည်ဖြစ်သည်။ Free Tier တွင် ပေးပို့သော အချက်အလက်များကို Google က ၎င်း၏ထုတ်ကုန်များ တိုးတက်စေရန် အသုံးပြုနိုင်ပါသည်။ ထို့ကြောင့် အမည်၊ ဖုန်း၊ လိပ်စာ၊ မှတ်ပုံတင်နံပါတ် သို့မဟုတ် ခွဲခြားသိရှိနိုင်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။ ကျန်းမာရေးပညာပေးရန်သာ အသုံးပြုမည်။",
       {
         reply_markup: {
           inline_keyboard: [
@@ -733,7 +725,7 @@ bot.on("callback_query", async query => {
       await sendLongMessage(chatId, answer);
     } catch (error) {
       const friendlyMessage = "AI ဝန်ဆောင်မှုများ ယာယီအသုံးမပြုနိုင်သေးပါ။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။";
-      console.error("OpenAI health response failed:", { message: error && error.message, model: OPENAI_MODEL });
+      console.error("Gemini health response failed:", { message: error && error.message, model: GEMINI_MODEL });
 
       await bot.sendMessage(
         chatId,
