@@ -544,7 +544,14 @@ bot.on("message", async msg => {
   }
 
   const session = sessions.get(chatId);
-  if (!session) return;
+  if (!session) {
+    console.warn("Telegram message received without an active session:", { chatId });
+    return bot.sendMessage(
+      chatId,
+      "သင့်လုပ်ဆောင်မှုအဆင့်ကို ပြန်လည်ရယူရန် /start ကိုနှိပ်ပြီး မီနူးမှ ပြန်စတင်ပေးပါ။",
+      mainMenu
+    );
+  }
 
   if (session.step === "health_question") {
     if (text.length < 2 || text.length > 1500) {
@@ -583,6 +590,16 @@ bot.on("message", async msg => {
       }
     );
   }
+
+  console.warn("Telegram message did not match an active flow:", {
+    chatId,
+    sessionStep: session.step || "none"
+  });
+  return bot.sendMessage(
+    chatId,
+    "ဆက်လက်လုပ်ဆောင်ရန် မီနူးထဲမှ ဝန်ဆောင်မှုတစ်ခုကို ရွေးချယ်ပါ။",
+    mainMenu
+  );
 });
 
 bot.on("callback_query", async query => {
@@ -619,7 +636,14 @@ bot.on("callback_query", async query => {
     return showMenu(chatId);
   }
 
-  if (!sessions.has(chatId)) return;
+  if (!sessions.has(chatId)) {
+    console.warn("Telegram callback received without an active session:", { chatId, callbackData: data });
+    return bot.sendMessage(
+      chatId,
+      "ဤမီနူးအဆင့် သက်တမ်းကုန်သွားပါပြီ။ /start ကိုနှိပ်ပြီး ပြန်စတင်ပေးပါ။",
+      mainMenu
+    );
+  }
 
   if (data.startsWith("healthtopic_") && session.step === "health_topic") {
     const map = {
