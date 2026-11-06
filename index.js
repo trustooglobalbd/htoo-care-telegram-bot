@@ -450,6 +450,14 @@ bot.on("message", async msg => {
 
   const chatId = msg.chat.id;
   const text = msg.text.trim();
+  const activeSession = sessions.get(chatId);
+
+  // Log the flow without logging the user's private health question.
+  console.log("Telegram message received:", {
+    chatId,
+    textLength: text.length,
+    sessionStep: activeSession?.step || "none"
+  });
 
   if (text.startsWith("/")) return;
 
@@ -545,6 +553,8 @@ bot.on("message", async msg => {
 
     session.question = text;
     session.step = "health_duration";
+    sessions.set(chatId, session);
+    console.log("Health flow step updated:", { chatId, step: session.step });
 
     return bot.sendMessage(
       chatId,
@@ -555,6 +565,8 @@ bot.on("message", async msg => {
   if (session.step === "health_duration") {
     session.duration = text.slice(0, 100);
     session.step = "health_severity";
+    sessions.set(chatId, session);
+    console.log("Health flow step updated:", { chatId, step: session.step });
 
     return bot.sendMessage(
       chatId,
@@ -622,6 +634,8 @@ bot.on("callback_query", async query => {
 
     session.topic = map[data];
     session.step = "health_ai_consent";
+    sessions.set(chatId, session);
+    console.log("Health flow step updated:", { chatId, step: session.step, topic: session.topic });
 
     return bot.sendMessage(
       chatId,
@@ -649,6 +663,8 @@ bot.on("callback_query", async query => {
 
   if (data === "health_ai_yes" && session.step === "health_ai_consent") {
     session.step = "health_question";
+    sessions.set(chatId, session);
+    console.log("Health flow step updated:", { chatId, step: session.step });
 
     return bot.sendMessage(
       chatId,
@@ -667,6 +683,9 @@ bot.on("callback_query", async query => {
     if (!map[data]) return;
 
     session.severity = map[data];
+    session.step = "health_processing";
+    sessions.set(chatId, session);
+    console.log("Health flow step updated:", { chatId, step: session.step, severity: session.severity });
 
     if (data === "severity_severe") {
       await bot.sendMessage(
@@ -834,6 +853,10 @@ bot.on("callback_query", async query => {
 
 bot.on("polling_error", error => {
   console.error("Telegram polling error:", error && error.message);
+});
+
+bot.on("webhook_error", error => {
+  console.error("Telegram webhook error:", error && error.message);
 });
 
 bot.on("error", error => {
