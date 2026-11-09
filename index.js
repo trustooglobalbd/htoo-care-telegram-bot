@@ -192,18 +192,15 @@ async function saveQuizRecord(session) {
   });
 }
 
-const mainMenu = {
-  reply_markup: {
-    keyboard: [
-      ["🩺 ကျန်းမာရေးမေးမြန်းမယ်"],
-      ["📚 ကျန်းမာရေးဗဟုသုတ"],
-      ["🎯 ကျန်းမာရေး Quiz ဖြေမယ်"],
-      ["🌍 ပြည်ပရောက် မြန်မာများအတွက်"],
-      ["📞 7887 ကို ဖုန်းဆက်မယ်"]
-    ],
-    resize_keyboard: true
-  }
-};
+function getMainMenu(session = {}) {
+  const menus = {
+    my: ["🩺 ကျန်းမာရေးမေးမြန်းမယ်", "📚 ကျန်းမာရေးဗဟုသုတ", "🎯 ကျန်းမာရေး Quiz ဖြေမယ်", "🌍 ပြည်ပရောက် မြန်မာများအတွက်", "📞 7887 ကို ဖုန်းဆက်မယ်"],
+    en: ["🩺 Ask a health question", "📚 Health education", "🎯 Health quiz", "🌍 Support for Myanmar people abroad", "📞 Call 7887"],
+    th: ["🩺 สอบถามเรื่องสุขภาพ", "📚 ความรู้สุขภาพ", "🎯 แบบทดสอบสุขภาพ", "🌍 บริการสำหรับชาวเมียนมาในต่างประเทศ", "📞 โทร 7887"]
+  };
+  return { reply_markup: { keyboard: (menus[session.language || "my"] || menus.my).map(x => [x]), resize_keyboard: true } };
+}
+const mainMenu = getMainMenu();
 
 function showMenu(chatId) {
   const current = sessions.get(chatId) || {};
@@ -455,6 +452,12 @@ bot.on("message", async msg => {
   const chatId = msg.chat.id;
   const text = msg.text.trim();
   const activeSession = sessions.get(chatId);
+  const lang = activeSession?.language || "my";
+  const aliases = {
+    en: { "🩺 Ask a health question": "🩺 ကျန်းမာရေးမေးမြန်းမယ်", "📚 Health education": "📚 ကျန်းမာရေးဗဟုသုတ", "🎯 Health quiz": "🎯 ကျန်းမာရေး Quiz ဖြေမယ်", "🌍 Support for Myanmar people abroad": "🌍 ပြည်ပရောက် မြန်မာများအတွက်", "📞 Call 7887": "📞 7887 ကို ဖုန်းဆက်မယ်" },
+    th: { "🩺 สอบถามเรื่องสุขภาพ": "🩺 ကျန်းမာရေးမေးမြန်းမယ်", "📚 ความรู้สุขภาพ": "📚 ကျန်းမာရေးဗဟုသုတ", "🎯 แบบทดสอบสุขภาพ": "🎯 ကျန်းမာရေး Quiz ဖြေမယ်", "🌍 บริการสำหรับชาวเมียนมาในต่างประเทศ": "🌍 ပြည်ပရောက် မြန်မာများအတွက်", "📞 โทร 7887": "📞 7887 ကို ဖုန်းဆက်မယ်" }
+  };
+  const menuText = aliases[lang]?.[text] || text;
 
   // Log the flow without logging the user's private health question.
   console.log("Telegram message received:", {
@@ -465,7 +468,7 @@ bot.on("message", async msg => {
 
   if (text.startsWith("/")) return;
 
-  if (text === "🩺 ကျန်းမာရေးမေးမြန်းမယ်") {
+  if (menuText === "🩺 ကျန်းမာရေးမေးမြန်းမယ်") {
     const current = sessions.get(chatId) || {};
 
     sessions.set(chatId, {
@@ -490,7 +493,7 @@ bot.on("message", async msg => {
     );
   }
 
-  if (text === "📚 ကျန်းမာရေးဗဟုသုတ") {
+  if (menuText === "📚 ကျန်းမာရေးဗဟုသုတ") {
     return bot.sendMessage(
       chatId,
       "ဖတ်ရှုလိုသော အကြောင်းအရာကို ရွေးပါ။",
@@ -515,11 +518,11 @@ bot.on("message", async msg => {
     return bot.sendMessage(chatId, articles[text], mainMenu);
   }
 
-  if (text === "🎯 ကျန်းမာရေး Quiz ဖြေမယ်") {
+  if (menuText === "🎯 ကျန်းမာရေး Quiz ဖြေမယ်") {
     return startQuizConsent(chatId);
   }
 
-  if (text === "🌍 ပြည်ပရောက် မြန်မာများအတွက်") {
+  if (menuText === "🌍 ပြည်ပရောက် မြန်မာများအတွက်") {
     const session = sessions.get(chatId) || {
       language: "my",
       audience: "overseas"
@@ -535,7 +538,7 @@ bot.on("message", async msg => {
     );
   }
 
-  if (text === "📞 7887 ကို ဖုန်းဆက်မယ်") {
+  if (menuText === "📞 7887 ကို ဖုန်းဆက်မယ်") {
     return bot.sendMessage(
       chatId,
       "မြန်မာနိုင်ငံအတွင်းမှ ကျန်းမာရေးတိုင်ပင်ရန် 7887 သို့ ဖုန်းဆက်နိုင်ပါသည်။",
@@ -543,7 +546,7 @@ bot.on("message", async msg => {
     );
   }
 
-  if (text === "🏠 ပင်မမီနူး") {
+  if (menuText === "🏠 ပင်မမီနူး") {
     return showMenu(chatId);
   }
 
@@ -836,28 +839,16 @@ bot.on("callback_query", async query => {
   }
 
   if (data === "health_save_no" && session.step === "health_consent") {
-    sessions.delete(chatId);
-
-    return bot.sendMessage(
-      chatId,
-      "ဒေတာကို Google Sheets ထဲ မသိမ်းပါ။",
-      mainMenu
-    );
+    await bot.sendMessage(chatId, "ဒေတာကို Google Sheets ထဲ မသိမ်းပါ။");
+    return startFeedback(chatId);
   }
 
   if (data === "health_save_yes" && session.step === "health_consent") {
     try {
       const range = await saveHealthRecord(session);
 
-      sessions.delete(chatId);
-
-      return bot.sendMessage(
-        chatId,
-        "ဒေတာသိမ်းဆည်းမှု အောင်မြင်ပါပြီ။\nမှတ်တမ်းနေရာ: " +
-          range +
-          "\n\nBot သည် ရောဂါအတည်ပြုခြင်း သို့မဟုတ် ဆေးညွှန်းခြင်း မပြုပါ။",
-        mainMenu
-      );
+      await bot.sendMessage(chatId, "ဒေတာသိမ်းဆည်းမှု အောင်မြင်ပါပြီ။\nမှတ်တမ်းနေရာ: " + range);
+      return startFeedback(chatId);
     } catch (error) {
       console.error("Google Sheets health save failed:", error && error.message);
 
@@ -941,9 +932,8 @@ bot.on("callback_query", async query => {
         "\n\nသင်ရွေးချယ်ထားသည့်အတိုင်း အမှတ်ကို Google Sheets ထဲ မသိမ်းပါ။";
     }
 
-    sessions.delete(chatId);
-
-    return bot.sendMessage(chatId, ending, mainMenu);
+    await bot.sendMessage(chatId, ending);
+    return startFeedback(chatId);
   }
 });
 
