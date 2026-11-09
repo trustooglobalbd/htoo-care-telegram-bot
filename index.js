@@ -210,11 +210,13 @@ function showMenu(chatId) {
     audience: current.audience || "myanmar"
   });
 
-  return bot.sendMessage(
-    chatId,
-    "မင်္ဂလာပါ။ Htuu Care မှ ကြိုဆိုပါတယ်။\n\nဝန်ဆောင်မှုတစ်ခုကို ရွေးချယ်ပါ။",
-    mainMenu
-  );
+  const lang = sessions.get(chatId).language;
+  const greetings = {
+    my: "မင်္ဂလာပါ။ Htuu Care မှ ကြိုဆိုပါတယ်။\n\nဝန်ဆောင်မှုတစ်ခုကို ရွေးချယ်ပါ။",
+    en: "Welcome to Htuu Care.\n\nPlease choose a service.",
+    th: "ยินดีต้อนรับสู่ Htuu Care\n\nกรุณาเลือกบริการ"
+  };
+  return bot.sendMessage(chatId, greetings[lang] || greetings.my, getMainMenu(sessions.get(chatId)));
 }
 
 async function sendLongMessage(chatId, message) {
@@ -412,11 +414,12 @@ function sendQuizQuestion(chatId, session) {
 }
 
 bot.onText(/^\/start$/, msg => {
+  const previous = sessions.get(msg.chat.id) || {};
   sessions.set(msg.chat.id, {
-    language: "my",
-    audience: "myanmar"
+    ...previous,
+    language: previous.language || "my",
+    audience: previous.audience || "myanmar"
   });
-
   return showLanguageSelection(msg.chat.id);
 });
 
