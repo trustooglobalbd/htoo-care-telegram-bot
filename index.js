@@ -689,6 +689,15 @@ bot.on("callback_query", async query => {
     );
   }
 
+  if (data === "feedback_retry" && session.step === "feedback_retry") {
+    return finishFeedback(chatId, session);
+  }
+
+  if (data === "feedback_retry_skip" && session.step === "feedback_retry") {
+    sessions.delete(chatId);
+    return bot.sendMessage(chatId, "Thank you. You can return to the main menu.", getMainMenu(session));
+  }
+
   if (data.startsWith("feedback_rate_") && session.step === "feedback_rating") {
     const rating = Number(data.slice("feedback_rate_".length));
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
@@ -975,7 +984,7 @@ async function finishFeedback(chatId, session) {
       th: "ขอบคุณสำหรับข้อเสนอแนะ ความคิดเห็นของคุณจะช่วยพัฒนา Htuu Care"
     };
     sessions.delete(chatId);
-    return bot.sendMessage(chatId, thanks[lang] || thanks.my, mainMenu);
+    return bot.sendMessage(chatId, thanks[lang] || thanks.my, getMainMenu(session));
   } catch (error) {
     console.error("Feedback save failed:", error && error.message);
     const lang = session.language || "my";
@@ -984,8 +993,14 @@ async function finishFeedback(chatId, session) {
       en: "We could not confirm that your feedback was saved. Please try again later.",
       th: "ยังไม่สามารถยืนยันการบันทึกข้อเสนอแนะได้ โปรดลองอีกครั้งภายหลัง"
     };
-    sessions.delete(chatId);
-    return bot.sendMessage(chatId, failed[lang] || failed.my, mainMenu);
+    session.step = "feedback_retry";
+    sessions.set(chatId, session);
+    return bot.sendMessage(chatId, failed[lang] || failed.my, {
+      reply_markup: { inline_keyboard: [
+        [{ text: ({ my: "ထပ်မံကြိုးစားမယ်", en: "Retry", th: "ลองอีกครั้ง" })[lang] || "Retry", callback_data: "feedback_retry" }],
+        [{ text: ({ my: "မီနူးသို့ ပြန်မယ်", en: "Return to menu", th: "กลับสู่เมนู" })[lang] || "Return to menu", callback_data: "feedback_retry_skip" }]
+      ] }
+    });
   }
 }
 
