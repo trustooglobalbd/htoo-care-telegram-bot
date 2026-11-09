@@ -518,7 +518,8 @@ bot.on("message", async msg => {
   }
 
   if (articles[text]) {
-    return bot.sendMessage(chatId, articles[text], mainMenu);
+    await bot.sendMessage(chatId, articles[text], getMainMenu(activeSession || {}));
+    return startFeedback(chatId);
   }
 
   if (menuText === "🎯 ကျန်းမာရေး Quiz ဖြေမယ်") {
@@ -534,19 +535,17 @@ bot.on("message", async msg => {
     session.audience = "overseas";
     sessions.set(chatId, session);
 
-    return bot.sendMessage(
-      chatId,
-      getConsultationContact(session),
-      mainMenu
-    );
+    await bot.sendMessage(chatId, getConsultationContact(session), getMainMenu(session));
+    return startFeedback(chatId);
   }
 
   if (menuText === "📞 7887 ကို ဖုန်းဆက်မယ်") {
-    return bot.sendMessage(
+    await bot.sendMessage(
       chatId,
       "မြန်မာနိုင်ငံအတွင်းမှ ကျန်းမာရေးတိုင်ပင်ရန် 7887 သို့ ဖုန်းဆက်နိုင်ပါသည်။",
-      mainMenu
+      getMainMenu(activeSession || {})
     );
+    return startFeedback(chatId);
   }
 
   if (menuText === "🏠 ပင်မမီနူး") {
