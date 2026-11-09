@@ -34,6 +34,18 @@ const LANGUAGES = {
     contact: "If you are in Myanmar, call 7887.",
     overseasContact: "Specialist Consultation for Myanmar people abroad:\n09 442 111 110 (Phone / Viber / Telegram)",
        disclaimer: "This is general health education, not a diagnosis or prescription."
+  },
+  th: {
+    welcome: "ยินดีต้อนรับสู่ Htuu Care",
+    chooseLanguage: "กรุณาเลือกภาษา",
+    health: "🩺 ข้อมูลสุขภาพ",
+    specialist: "🌍 ปรึกษาผู้เชี่ยวชาญ",
+    location: "ขณะนี้คุณอยู่ที่ใด?",
+    myanmar: "🇲🇲 ภายในประเทศเมียนมา",
+    overseas: "🌏 ชาวเมียนมาที่อาศัยอยู่ต่างประเทศ",
+    contact: "หากอยู่ในเมียนมา สามารถโทร 7887 ได้",
+    overseasContact: "ปรึกษาผู้เชี่ยวชาญสำหรับชาวเมียนมาในต่างประเทศ:\\n09 442 111 110 (โทรศัพท์ / Viber / Telegram)",
+    disclaimer: "ข้อมูลนี้จัดทำเพื่อให้ความรู้ด้านสุขภาพทั่วไป ไม่ใช่การวินิจฉัยโรคหรือการสั่งยา"
   }
 };
 
@@ -545,6 +557,40 @@ bot.on("message", async msg => {
     );
   }
 
+  if (session.step === "feedback_suggestion") {
+    session.feedbackSuggestion = /^skip$/i.test(text) ? "" : text.slice(0, 1000);
+    session.step = "feedback_contact_choice";
+    sessions.set(chatId, session);
+    const lang = session.language || "my";
+    const prompts = {
+      my: "ပြန်လည်ဆက်သွယ်ပေးစေလိုပါသလား။ ဖုန်းနံပါတ်ကို သင်ရွေးချယ်မှသာ တောင်းယူပါမည်။",
+      en: "Would you like our team to contact you? We will ask for your phone number only if you choose Yes.",
+      th: "ต้องการให้ทีมงานติดต่อกลับหรือไม่? เราจะขอหมายเลขโทรศัพท์เฉพาะเมื่อคุณเลือกต้องการ"
+    };
+    const choices = {
+      my: [["ပြန်ဆက်သွယ်စေလိုပါတယ်","feedback_contact_yes"],["မလိုပါ","feedback_contact_no"]],
+      en: [["Yes, contact me","feedback_contact_yes"],["No, thank you","feedback_contact_no"]],
+      th: [["ต้องการให้ติดต่อกลับ","feedback_contact_yes"],["ไม่ต้องการ","feedback_contact_no"]]
+    };
+    return bot.sendMessage(chatId, prompts[lang] || prompts.my, {
+      reply_markup: { inline_keyboard: (choices[lang] || choices.my).map(([label, data]) => [{ text: label, callback_data: data }]) }
+    });
+  }
+
+  if (session.step === "feedback_phone") {
+    if (/^skip$/i.test(text)) {
+      session.feedbackPhone = "";
+      return finishFeedback(chatId, session);
+    }
+    const phone = text.replace(/[\\s().-]/g, "");
+    if (!/^\\+?[0-9]{7,15}$/.test(phone)) {
+      return bot.sendMessage(chatId, "Please enter a valid phone number, or type Skip.");
+    }
+    session.feedbackPhone = phone;
+    session.feedbackContactRequested = true;
+    return finishFeedback(chatId, session);
+  }
+
   if (session.step === "health_question") {
     if (text.length < 2 || text.length > 1500) {
       return bot.sendMessage(chatId, "မေးခွန်းကို စာလုံး 2 မှ 1500 အတွင်း ရေးပေးပါ။");
@@ -635,6 +681,40 @@ bot.on("callback_query", async query => {
       "ဤမီနူးအဆင့် သက်တမ်းကုန်သွားပါပြီ။ /start ကိုနှိပ်ပြီး ပြန်စတင်ပေးပါ။",
       mainMenu
     );
+  }
+
+  if (data.startsWith("feedback_rate_") && session.step === "feedback_rating") {
+    const rating = Number(data.slice("feedback_rate_".length));
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return;
+    session.feedbackRating = rating;
+    session.step = "feedback_suggestion";
+    sessions.set(chatId, session);
+    const lang = session.language || "my";
+    const prompts = {
+      my: "အကြံပြုချက်ရှိပါက ရေးပေးပါ။ မရှိပါက Skip ဟုရေးနိုင်ပါသည်။",
+      en: "Please share a suggestion or comment. If none, type Skip.",
+      th: "โปรดแบ่งปันข้อเสนอแนะ หากไม่มีให้พิมพ์ Skip"
+    };
+    return bot.sendMessage(chatId, prompts[lang] || prompts.my);
+  }
+
+  if (data === "feedback_contact_yes" && session.step === "feedback_contact_choice") {
+    session.step = "feedback_phone";
+    session.feedbackContactRequested = true;
+    sessions.set(chatId, session);
+    const lang = session.language || "my";
+    const prompts = {
+      my: "သင့်တောင်းဆိုချက်အတွက်သာ အသုံးပြုရန် ဖုန်းနံပါတ်ကို ရေးပေးပါ။ မပေးလိုပါက Skip ဟုရေးနိုင်ပါသည်။",
+      en: "Please enter your phone number for this requested follow-up only. Type Skip if you prefer not to share it.",
+      th: "กรุณากรอกหมายเลขโทรศัพท์เพื่อให้ติดต่อกลับตามที่ร้องขอเท่านั้น หากไม่ต้องการให้พิมพ์ Skip"
+    };
+    return bot.sendMessage(chatId, prompts[lang] || prompts.my);
+  }
+
+  if (data === "feedback_contact_no" && session.step === "feedback_contact_choice") {
+    session.feedbackContactRequested = false;
+    session.feedbackPhone = "";
+    return finishFeedback(chatId, session);
   }
 
   if (data.startsWith("healthtopic_") && session.step === "health_topic") {
@@ -866,6 +946,55 @@ bot.on("callback_query", async query => {
     return bot.sendMessage(chatId, ending, mainMenu);
   }
 });
+
+async function startFeedback(chatId) {
+  const session = sessions.get(chatId) || { language: "my", audience: "myanmar" };
+  session.step = "feedback_rating";
+  session.feedbackId = crypto.randomUUID();
+  sessions.set(chatId, session);
+  const lang = session.language || "my";
+  const prompts = {
+    my: "ဝန်ဆောင်မှုအတွေ့အကြုံကို အဆင့်သတ်မှတ်ပေးပါ။ (၁ မှ ၅)",
+    en: "How would you rate your experience? (1 to 5)",
+    th: "คุณให้คะแนนประสบการณ์การใช้งานเท่าใด? (1 ถึง 5)"
+  };
+  return bot.sendMessage(chatId, prompts[lang] || prompts.my, {
+    reply_markup: { inline_keyboard: [1,2,3,4,5].map(n => [{ text: "⭐".repeat(n) + " " + n, callback_data: "feedback_rate_" + n }]) }
+  });
+}
+
+async function finishFeedback(chatId, session) {
+  try {
+    await postToAppsScript({
+      type: "feedback",
+      feedbackId: session.feedbackId,
+      rating: session.feedbackRating,
+      suggestion: session.feedbackSuggestion || "",
+      contactRequested: Boolean(session.feedbackContactRequested),
+      phoneNumber: session.feedbackContactRequested ? (session.feedbackPhone || "") : "",
+      language: session.language || "my",
+      consent: true
+    });
+    const lang = session.language || "my";
+    const thanks = {
+      my: "အကြံပြုချက်အတွက် ကျေးဇူးတင်ပါတယ်။ Htuu Care ကို ပိုမိုကောင်းမွန်စေရန် အသုံးပြုပါမည်။",
+      en: "Thank you for your feedback. It will help us improve Htuu Care.",
+      th: "ขอบคุณสำหรับข้อเสนอแนะ ความคิดเห็นของคุณจะช่วยพัฒนา Htuu Care"
+    };
+    sessions.delete(chatId);
+    return bot.sendMessage(chatId, thanks[lang] || thanks.my, mainMenu);
+  } catch (error) {
+    console.error("Feedback save failed:", error && error.message);
+    const lang = session.language || "my";
+    const failed = {
+      my: "အကြံပြုချက်ကို သိမ်းဆည်းနိုင်ကြောင်း အတည်မပြုနိုင်သေးပါ။ နောက်မှ ထပ်မံကြိုးစားပေးပါ။",
+      en: "We could not confirm that your feedback was saved. Please try again later.",
+      th: "ยังไม่สามารถยืนยันการบันทึกข้อเสนอแนะได้ โปรดลองอีกครั้งภายหลัง"
+    };
+    sessions.delete(chatId);
+    return bot.sendMessage(chatId, failed[lang] || failed.my, mainMenu);
+  }
+}
 
 bot.on("polling_error", error => {
   console.error("Telegram polling error:", error && error.message);
