@@ -601,8 +601,8 @@ bot.on("message", async msg => {
       session.feedbackPhone = "";
       return finishFeedback(chatId, session);
     }
-    const phone = text.replace(/[\\s().-]/g, "");
-    if (!/^\\+?[0-9]{7,15}$/.test(phone)) {
+    const phone = text.replace(/[\s().-]/g, "");
+    if (!/^\+?[0-9]{7,15}$/.test(phone)) {
       return bot.sendMessage(chatId, flowText(session, "invalidPhone"));
     }
     session.feedbackPhone = phone;
