@@ -54,6 +54,31 @@ function getText(session, key) {
   return LANGUAGES[lang]?.[key] || LANGUAGES.my[key] || key;
 }
 
+const FLOW_TEXT = {
+my:{
+chooseTopic:"အကြောင်းအရာကို ရွေးပါ။",topicGeneral:"အထွေထွေကျန်းမာရေး",topicSrhr:"🌸 SRHR",topicMenstrual:"🩸 ရာသီလာခြင်း",topicPregnancy:"🤰 ကိုယ်ဝန်ဆောင်ကျန်းမာရေး",topicSti:"🛡️ STI/HIV",
+privacy:"ကိုယ်ရေးလုံခြုံမှု အသိပေးချက် — သင့်မေးခွန်းကို Google Gemini API သို့ ပို့ပေးမည်ဖြစ်ပြီး ကျန်းမာရေးပညာပေးရန်သာ အသုံးပြုမည်။ အမည်၊ ဖုန်းနံပါတ်၊ မှတ်ပုံတင်နံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။",privacyYes:"နားလည်ပါပြီ၊ ဆက်လုပ်မယ်",privacyNo:"မဆက်လုပ်တော့ပါ",noAi:"AI သို့ မေးခွန်းမပို့ပါ။ ကျန်းမာရေးဗဟုသုတကို ဖတ်ရှုနိုင်သည် သို့မဟုတ် 7887 ကို ဆက်သွယ်နိုင်ပါသည်။",
+askQuestion:"မေးခွန်းကို ရေးပေးပါ။ အမည်၊ မှတ်ပုံတင်နံပါတ်၊ ဖုန်းနံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက် မပို့ပါရန် သတိပေးထားပါသည်။",questionLength:"မေးခွန်းကို စာလုံး 2 မှ 1500 အတွင်း ရေးပေးပါ။",duration:"ဤပြဿနာဖြစ်လာတာ ဘယ်လောက်ကြာပြီလဲ။ မသက်ဆိုင်ပါက “မသက်ဆိုင်” ဟုရေးပါ။",
+severity:"ပြင်းထန်မှုကို ရွေးပါ။",mild:"အနည်းငယ်",moderate:"အလယ်အလတ်",severe:"ပြင်းထန်",notApplicable:"မသက်ဆိုင်",severeWarning:"ပြင်းထန်သည်ဟု ရွေးထားပါသည်။ အသက်ရှူရခက်ခြင်း၊ သတိလစ်ခြင်း၊ ရင်ဘတ်နာခြင်း၊ သွေးထွက်များခြင်း သို့မဟုတ် တက်ခြင်းရှိပါက ချက်ချင်း အရေးပေါ်ကျန်းမာရေးစောင့်ရှောက်မှု ရယူပါ။",
+processing:"အထွေထွေကျန်းမာရေးအချက်အလက်ကို ပြင်ဆင်နေပါတယ်။",aiError:"AI ဝန်ဆောင်မှုကို ယာယီအသုံးမပြုနိုင်သေးပါ။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။",backToMenu:"ပင်မမီနူးသို့ ပြန်သွားနိုင်ပါသည်။",saveConsent:"သင်၏ မေးခွန်းနှင့် အကြောင်းအရာကို Google Sheets ထဲ အမည်နှင့် Telegram ID မပါဘဲ သိမ်းဆည်းနိုင်ပါသည်။",saveYes:"သဘောတူပြီး သိမ်းမယ်",saveNo:"မသိမ်းပါနဲ့",notSaved:"ဒေတာကို Google Sheets ထဲ မသိမ်းပါ။",saved:"ဒေတာသိမ်းဆည်းမှု အောင်မြင်ပါပြီ။\nမှတ်တမ်းနေရာ: ",saveFailed:"ဒေတာသိမ်းဆည်းမှု မအောင်မြင်ပါ။ အောင်မြင်ကြောင်း အတည်ပြုနိုင်ခြင်း မရှိသေးပါ။",invalidPhone:"ဖုန်းနံပါတ် မှန်ကန်စွာရေးပေးပါ။ မပေးလိုပါက Skip ဟုရေးပါ။",retryThanks:"ကျေးဇူးတင်ပါတယ်။ ပင်မမီနူးသို့ ပြန်သွားနိုင်ပါသည်။"
+},
+en:{
+chooseTopic:"Please choose a health topic.",topicGeneral:"General health",topicSrhr:"🌸 Sexual and reproductive health (SRHR)",topicMenstrual:"🩸 Menstrual health",topicPregnancy:"🤰 Pregnancy and maternal health",topicSti:"🛡️ STI/HIV",
+privacy:"Privacy notice: Your question will be sent to the Google Gemini API and used to provide general health education. Please do not include unnecessary personal information such as your name, phone number, ID number or address.",privacyYes:"I understand. Continue",privacyNo:"Cancel",noAi:"Your question was not sent to the AI service. You can read the Health Education section or contact 7887.",
+askQuestion:"Please type your health question. Do not include unnecessary personal information such as your name, ID number, phone number or address.",questionLength:"Please enter a question between 2 and 1,500 characters.",duration:"How long have you been experiencing this issue? If not applicable, type “Not applicable”.",
+severity:"How severe is the issue?",mild:"Mild",moderate:"Moderate",severe:"Severe",notApplicable:"Not applicable",severeWarning:"You selected Severe. If you have difficulty breathing, loss of consciousness, chest pain, heavy bleeding or a seizure, seek emergency medical care immediately.",
+processing:"Preparing general health information. Please wait.",aiError:"The AI service is temporarily unavailable. Please wait a moment and try again.",backToMenu:"You can return to the main menu.",saveConsent:"You may choose to save your question and related information to Google Sheets without your name or Telegram ID.",saveYes:"I agree. Save my record",saveNo:"Do not save",notSaved:"Your data was not saved to Google Sheets.",saved:"Your record was saved successfully.\nRecord location: ",saveFailed:"We could not confirm that your data was saved. Please try again later.",invalidPhone:"Please enter a valid phone number, or type Skip.",retryThanks:"Thank you. You can return to the main menu."
+},
+th:{
+chooseTopic:"กรุณาเลือกหัวข้อสุขภาพ",topicGeneral:"สุขภาพทั่วไป",topicSrhr:"🌸 สุขภาพและสิทธิทางเพศและอนามัยการเจริญพันธุ์ (SRHR)",topicMenstrual:"🩸 สุขภาพประจำเดือน",topicPregnancy:"🤰 การตั้งครรภ์และสุขภาพมารดา",topicSti:"🛡️ โรคติดต่อทางเพศสัมพันธ์ / HIV",
+privacy:"ประกาศความเป็นส่วนตัว: คำถามของคุณจะถูกส่งไปยัง Google Gemini API เพื่อใช้ให้ข้อมูลความรู้ด้านสุขภาพทั่วไป โปรดอย่าระบุข้อมูลส่วนบุคคลที่ไม่จำเป็น เช่น ชื่อ หมายเลขโทรศัพท์ หมายเลขประจำตัว หรือที่อยู่",privacyYes:"เข้าใจแล้ว ดำเนินการต่อ",privacyNo:"ยกเลิก",noAi:"คำถามของคุณไม่ได้ถูกส่งไปยังบริการ AI คุณสามารถอ่านความรู้สุขภาพหรือโทรติดต่อ 7887 ได้",
+askQuestion:"กรุณาพิมพ์คำถามเกี่ยวกับสุขภาพ โปรดอย่าระบุข้อมูลส่วนบุคคลที่ไม่จำเป็น เช่น ชื่อ หมายเลขประจำตัว หมายเลขโทรศัพท์ หรือที่อยู่",questionLength:"กรุณาพิมพ์คำถามที่มีความยาว 2–1,500 ตัวอักษร",duration:"คุณมีอาการนี้มานานเท่าใดแล้ว? หากไม่เกี่ยวข้อง โปรดพิมพ์ “ไม่เกี่ยวข้อง”",
+severity:"อาการรุนแรงเพียงใด?",mild:"เล็กน้อย",moderate:"ปานกลาง",severe:"รุนแรง",notApplicable:"ไม่เกี่ยวข้อง",severeWarning:"คุณเลือกว่ามีอาการรุนแรง หากหายใจลำบาก หมดสติ เจ็บหน้าอก เลือดออกมาก หรือชัก โปรดไปพบแพทย์ฉุกเฉินทันที",
+processing:"กำลังเตรียมข้อมูลสุขภาพทั่วไป โปรดรอสักครู่",aiError:"ขณะนี้บริการ AI ไม่พร้อมใช้งานชั่วคราว โปรดลองอีกครั้งในภายหลัง",backToMenu:"คุณสามารถกลับไปยังเมนูหลักได้",saveConsent:"คุณสามารถเลือกบันทึกคำถามและข้อมูลที่เกี่ยวข้องลงใน Google Sheets โดยไม่บันทึกชื่อหรือ Telegram ID ของคุณ",saveYes:"ยินยอมและบันทึกข้อมูล",saveNo:"ไม่บันทึกข้อมูล",notSaved:"ไม่มีการบันทึกข้อมูลของคุณลงใน Google Sheets",saved:"บันทึกข้อมูลเรียบร้อยแล้ว\nตำแหน่งข้อมูล: ",saveFailed:"ไม่สามารถยืนยันการบันทึกข้อมูลได้ โปรดลองอีกครั้งภายหลัง",invalidPhone:"กรุณากรอกหมายเลขโทรศัพท์ให้ถูกต้อง หรือพิมพ์ Skip",retryThanks:"ขอบคุณ คุณสามารถกลับไปยังเมนูหลักได้"
+}
+};
+function flowText(session,key){const lang=session?.language||"my";return FLOW_TEXT[lang]?.[key]||FLOW_TEXT.my[key]||key;}
+
 function getConsultationContact(session) {
   if (session.audience === "overseas") {
     return getText(session, "overseasContact");
@@ -473,27 +498,16 @@ bot.on("message", async msg => {
 
   if (menuText === "🩺 ကျန်းမာရေးမေးမြန်းမယ်") {
     const current = sessions.get(chatId) || {};
-
-    sessions.set(chatId, {
-      ...current,
-      step: "health_topic"
+    sessions.set(chatId, { ...current, step: "health_topic" });
+    return bot.sendMessage(chatId, flowText(current, "chooseTopic"), {
+      reply_markup: { inline_keyboard: [
+        [{ text: flowText(current, "topicGeneral"), callback_data: "healthtopic_general" }],
+        [{ text: flowText(current, "topicSrhr"), callback_data: "healthtopic_srhr" }],
+        [{ text: flowText(current, "topicMenstrual"), callback_data: "healthtopic_menstrual" }],
+        [{ text: flowText(current, "topicPregnancy"), callback_data: "healthtopic_pregnancy" }],
+        [{ text: flowText(current, "topicSti"), callback_data: "healthtopic_sti" }]
+      ] }
     });
-
-    return bot.sendMessage(
-      chatId,
-      "အကြောင်းအရာကို ရွေးပါ။",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "အထွေထွေကျန်းမာရေး", callback_data: "healthtopic_general" }],
-            [{ text: "🌸 SRHR", callback_data: "healthtopic_srhr" }],
-            [{ text: "🩸 ရာသီလာခြင်း", callback_data: "healthtopic_menstrual" }],
-            [{ text: "🤰 ကိုယ်ဝန်ဆောင်ကျန်းမာရေး", callback_data: "healthtopic_pregnancy" }],
-            [{ text: "🛡️ STI/HIV", callback_data: "healthtopic_sti" }]
-          ]
-        }
-      }
-    );
   }
 
   if (menuText === "📚 ကျန်းမာရေးဗဟုသုတ") {
@@ -542,7 +556,7 @@ bot.on("message", async msg => {
   if (menuText === "📞 7887 ကို ဖုန်းဆက်မယ်") {
     await bot.sendMessage(
       chatId,
-      "မြန်မာနိုင်ငံအတွင်းမှ ကျန်းမာရေးတိုင်ပင်ရန် 7887 သို့ ဖုန်းဆက်နိုင်ပါသည်။",
+      getText(activeSession || {}, "contact"),
       getMainMenu(activeSession || {})
     );
     return startFeedback(chatId);
@@ -589,7 +603,7 @@ bot.on("message", async msg => {
     }
     const phone = text.replace(/[\\s().-]/g, "");
     if (!/^\\+?[0-9]{7,15}$/.test(phone)) {
-      return bot.sendMessage(chatId, "Please enter a valid phone number, or type Skip.");
+      return bot.sendMessage(chatId, flowText(session, "invalidPhone"));
     }
     session.feedbackPhone = phone;
     session.feedbackContactRequested = true;
@@ -597,19 +611,14 @@ bot.on("message", async msg => {
   }
 
   if (session.step === "health_question") {
-    if (text.length < 2 || text.length > 1500) {
-      return bot.sendMessage(chatId, "မေးခွန်းကို စာလုံး 2 မှ 1500 အတွင်း ရေးပေးပါ။");
-    }
+    if (text.length < 2 || text.length > 1500) return bot.sendMessage(chatId, flowText(session, "questionLength"));
 
     session.question = text;
     session.step = "health_duration";
     sessions.set(chatId, session);
     console.log("Health flow step updated:", { chatId, step: session.step });
 
-    return bot.sendMessage(
-      chatId,
-      "ဤပြဿနာဖြစ်လာတာ ဘယ်လောက်ကြာပြီလဲ။ မသက်ဆိုင်ပါက “မသက်ဆိုင်” ဟုရေးပါ။"
-    );
+    return bot.sendMessage(chatId, flowText(session, "duration"));
   }
 
   if (session.step === "health_duration") {
@@ -618,20 +627,12 @@ bot.on("message", async msg => {
     sessions.set(chatId, session);
     console.log("Health flow step updated:", { chatId, step: session.step });
 
-    return bot.sendMessage(
-      chatId,
-      "ပြင်းထန်မှုကို ရွေးပါ။",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "အနည်းငယ်", callback_data: "severity_mild" }],
-            [{ text: "အလယ်အလတ်", callback_data: "severity_moderate" }],
-            [{ text: "ပြင်းထန်", callback_data: "severity_severe" }],
-            [{ text: "မသက်ဆိုင်", callback_data: "severity_na" }]
-          ]
-        }
-      }
-    );
+    return bot.sendMessage(chatId, flowText(session, "severity"), { reply_markup: { inline_keyboard: [
+      [{ text: flowText(session, "mild"), callback_data: "severity_mild" }],
+      [{ text: flowText(session, "moderate"), callback_data: "severity_moderate" }],
+      [{ text: flowText(session, "severe"), callback_data: "severity_severe" }],
+      [{ text: flowText(session, "notApplicable"), callback_data: "severity_na" }]
+    ] } });
   }
 
   console.warn("Telegram message did not match an active flow:", {
@@ -694,7 +695,7 @@ bot.on("callback_query", async query => {
 
   if (data === "feedback_retry_skip" && session.step === "feedback_retry") {
     sessions.delete(chatId);
-    return bot.sendMessage(chatId, "Thank you. You can return to the main menu.", getMainMenu(session));
+    return bot.sendMessage(chatId, flowText(session, "retryThanks"), getMainMenu(session));
   }
 
   if (data.startsWith("feedback_rate_") && session.step === "feedback_rating") {
@@ -749,15 +750,11 @@ bot.on("callback_query", async query => {
 
     return bot.sendMessage(
       chatId,
-      "ကိုယ်ရေးလုံခြုံမှု အသိပေးချက် — သင့်မေးခွန်းကို Google Gemini API သို့ ပို့ပေးမည်ဖြစ်ပြီး ကျန်းမာရေးပညာပေးရန်သာ အသုံးပြုမည်။ အမည်၊ ဖုန်းနံပါတ်၊ မှတ်ပုံတင်နံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက်များ မထည့်ပါနှင့်။",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "နားလည်ပါပြီ၊ ဆက်လုပ်မယ်", callback_data: "health_ai_yes" }],
-            [{ text: "မဆက်လုပ်တော့ပါ", callback_data: "health_ai_no" }]
-          ]
-        }
-      }
+      flowText(session, "privacy"),
+      { reply_markup: { inline_keyboard: [
+        [{ text: flowText(session, "privacyYes"), callback_data: "health_ai_yes" }],
+        [{ text: flowText(session, "privacyNo"), callback_data: "health_ai_no" }]
+      ] } }
     );
   }
 
@@ -766,8 +763,8 @@ bot.on("callback_query", async query => {
 
     return bot.sendMessage(
       chatId,
-      "AI သို့ မေးခွန်းမပို့ပါ။ ကျန်းမာရေးဗဟုသုတကို ဖတ်ရှုနိုင်သည် သို့မဟုတ် 7887 ကို ဆက်သွယ်နိုင်ပါသည်။",
-      mainMenu
+      flowText(session, "noAi"),
+      getMainMenu(session)
     );
   }
 
@@ -778,7 +775,7 @@ bot.on("callback_query", async query => {
 
     return bot.sendMessage(
       chatId,
-      "မေးခွန်းကို ရေးပေးပါ။ အမည်၊ မှတ်ပုံတင်နံပါတ်၊ ဖုန်းနံပါတ်၊ လိပ်စာကဲ့သို့ မလိုအပ်သော ကိုယ်ရေးအချက်အလက် မပို့ပါရန် သတိပေးထားပါသည်။"
+      flowText(session, "askQuestion")
     );
   }
 
@@ -800,14 +797,14 @@ bot.on("callback_query", async query => {
     if (data === "severity_severe") {
       await bot.sendMessage(
         chatId,
-        "ပြင်းထန်သည်ဟု ရွေးထားပါသည်။ အသက်ရှူရခက်ခြင်း၊ သတိလစ်ခြင်း၊ ရင်ဘတ်နာခြင်း၊ ကြွက်သားအတော်များများ ရုတ်တရက်ရှိပါက ချက်ချင်း ကျန်းမာရေးဝန်ထမ်းနှင့် ဆက်သွယ်ပါ။"
+        flowText(session, "severeWarning")
       );
     }
 
     session.step = "health_consent";
 
     try {
-      await bot.sendMessage(chatId, "အထွေထွေကျန်းမာရေးအချက်အလက်ကို ပြင်ဆင်နေပါတယ်။");
+      await bot.sendMessage(chatId, flowText(session, "processing"));
 
       const aiResult = await getHealthAnswer(session);
       let answer = aiResult.answer;
@@ -818,7 +815,7 @@ bot.on("callback_query", async query => {
 
       await sendLongMessage(chatId, answer);
     } catch (error) {
-      const friendlyMessage = "AI ဝန်ဆောင်မှုများ ယာယီအသုံးမပြုနိုင်သေးပါ။ ခဏစောင့်ပြီး ထပ်မံကြိုးစားပါ။";
+      const friendlyMessage = flowText(session, "aiError");
       console.error("Gemini health response failed:", { message: error && error.message, model: GEMINI_MODEL });
 
       await bot.sendMessage(
@@ -830,27 +827,23 @@ bot.on("callback_query", async query => {
 
       return bot.sendMessage(
         chatId,
-        "ပင်မမီနူးသို့ ပြန်သွားနိုင်ပါသည်။",
-        mainMenu
+        flowText(session, "backToMenu"),
+        getMainMenu(session)
       );
     }
 
     return bot.sendMessage(
       chatId,
-      "သင်၏ မေးခွန်းနှင့် အကြောင်းအရာကို Google Sheets ထဲ အမည်နှင့် Telegram ID မပါဘဲ သိမ်းဆည်းနိုင်ပါသည်။",
-      {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "သဘောတူပြီး သိမ်းမယ်", callback_data: "health_save_yes" }],
-            [{ text: "မသိမ်းပါနဲ့", callback_data: "health_save_no" }]
-          ]
-        }
-      }
+      flowText(session, "saveConsent"),
+      { reply_markup: { inline_keyboard: [
+        [{ text: flowText(session, "saveYes"), callback_data: "health_save_yes" }],
+        [{ text: flowText(session, "saveNo"), callback_data: "health_save_no" }]
+      ] } }
     );
   }
 
   if (data === "health_save_no" && session.step === "health_consent") {
-    await bot.sendMessage(chatId, "ဒေတာကို Google Sheets ထဲ မသိမ်းပါ။");
+    await bot.sendMessage(chatId, flowText(session, "notSaved"));
     return startFeedback(chatId);
   }
 
@@ -858,15 +851,15 @@ bot.on("callback_query", async query => {
     try {
       const range = await saveHealthRecord(session);
 
-      await bot.sendMessage(chatId, "ဒေတာသိမ်းဆည်းမှု အောင်မြင်ပါပြီ။\nမှတ်တမ်းနေရာ: " + range);
+      await bot.sendMessage(chatId, flowText(session, "saved") + range);
       return startFeedback(chatId);
     } catch (error) {
       console.error("Google Sheets health save failed:", error && error.message);
 
       return bot.sendMessage(
         chatId,
-        "ဒေတာသိမ်းဆည်းမှု မအောင်မြင်ပါ။ အောင်မြင်ကြောင်း မအတည်ပြုနိုင်သေးပါ။",
-        mainMenu
+        flowText(session, "saveFailed"),
+        getMainMenu(session)
       );
     }
   }
