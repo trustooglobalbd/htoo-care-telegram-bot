@@ -1,135 +1,168 @@
-# Htuu Care | Digital Health Information Assistant
+# Htuu Care
+### AI-Assisted Health Information & Referral Platform
 
 <p align="center">
-  <strong>Healthcare information should be easier to access, understand and act on.</strong>
+  <strong>Clear health information. Safer choices. Better access to care.</strong>
 </p>
 
-Htuu Care is a Telegram-based digital health information initiative developed by **Trust Oo Co., Ltd.** It is designed to make general health education more accessible to Myanmar communities, including Myanmar nationals living abroad.
-
-> **Our purpose:** Help people find understandable health information and connect with appropriate healthcare support — through a simple messaging experience.
+<p align="center">
+  <a href="https://t.me/HtooCare_Bot">Explore the Telegram Prototype</a>
+  ·
+  <a href="https://github.com/trustooglobalbd/htoo-care-telegram-bot">View Source Code</a>
+</p>
 
 ---
 
-## 🌏 About Htuu Care
+## 🌍 The Vision
 
-Htuu Care brings basic health education and service navigation into a familiar messaging platform. The project is being developed with a focus on accessibility, respectful communication and responsible use of digital technology.
+**Htuu Care** is a digital health information and referral initiative by **Trust Oo Co., Ltd.**, designed to make reliable, understandable and inclusive health information easier to access.
 
-### What the bot is designed to offer
+For many women, adolescents and young people, finding clear and trustworthy information about their health can be difficult. Language barriers, stigma, limited access to health services and uncertainty about where to seek help can prevent people from making informed decisions.
 
-- **Health information:** General educational information on common health topics.
-- **Health questions:** A guided flow for users to describe a health concern and receive general educational information.
-- **SRHR information:** Non-judgmental information about sexual and reproductive health, menstruation, pregnancy, contraception and STI/HIV topics.
-- **Health learning quiz:** Short educational quizzes to support health awareness.
-- **Service connection:** Information about the 7887 Healthcare Call Center and specialist consultation contact options.
-- **Language access:** A language-selection experience for Myanmar, English and Thai. The completeness of translated screens and content is an ongoing improvement area.
-- **User feedback:** Planned feedback collection to help improve the service.
+Htuu Care aims to help close this information gap through a simple, familiar digital channel — connecting people with health education, guided information support and appropriate healthcare referral pathways.
 
-## 🗣️ Language Access
+Our long-term vision is an accessible, multilingual health information and navigation platform for **people in Myanmar and Myanmar communities living abroad**.
 
-The intended language options are:
+## 💡 What Makes Htuu Care Different?
 
-| Language | Selection |
+Htuu Care is being developed around three connected elements:
+
+| Element | What it means |
 |---|---|
-| Myanmar | 🇲🇲 မြန်မာ |
-| English | 🇬🇧 English |
-| Thai | 🇹🇭 ภาษาไทย |
+| **Accessible digital information** | Health education through a familiar messaging platform, with Myanmar, English and Thai language pathways. |
+| **AI-assisted guidance** | A planned AI-supported experience to help users navigate general health information in clear, understandable language. |
+| **Human support & referral** | Connecting users with appropriate healthcare professionals and services when additional support is needed. |
 
-The selected language should be used consistently across welcome messages, menus, instructions, consent notices, quiz content, service information and feedback prompts. Translation quality and completeness should be reviewed before public release.
+The platform is intended to make health information easier to understand — **not to replace clinicians, diagnose conditions or prescribe treatment**.
 
-## 🔐 Privacy, Consent & Safety
+## 🎯 Who We Aim to Support
 
-Htuu Care is a health education tool, not a clinical diagnostic service.
+Htuu Care is designed with the needs of the following communities in mind:
 
-- Do not enter names, identity numbers, exact addresses or other unnecessary personal information in health questions.
-- Health information sent to an AI provider may be processed under that provider's terms and data practices. Do not submit identifiable patient information.
-- Saving health-related information to Google Sheets should happen only after the user is clearly informed and gives consent.
-- Telephone numbers should be requested **only when a user chooses to be contacted after submitting feedback**. Providing a number must remain optional.
-- Feedback should be accepted without requiring a telephone number.
-- Do not use bot responses as a substitute for assessment, diagnosis or treatment by a qualified healthcare professional.
-- For emergency warning signs, users should seek urgent medical care immediately.
+- **Women and adolescent girls** seeking accessible, respectful health information.
+- **Adolescents and young people** who need clear, age-appropriate and non-judgmental health education.
+- **Underserved communities** facing barriers to reliable health information and service access.
+- **Myanmar nationals living abroad** who may need health information and guidance in familiar languages.
 
-## 🧭 User Experience
+Priority content areas include sexual and reproductive health and rights (SRHR), menstrual health, pregnancy and maternal health, general health awareness and service navigation. Content will be developed and reviewed with appropriate health expertise.
 
-The bot's core service journey is intended to remain simple:
+## 🧪 Current Prototype
 
-1. Choose a language.
-2. Select the user's location context.
-3. Open the main menu.
-4. Use the selected service, such as health information, a health question, a quiz or service contact information.
-5. After a completed interaction, optionally rate the experience and share suggestions.
-6. Only if the user asks to be contacted, optionally provide a telephone number.
-7. Return to the main menu.
+A functional **Telegram-based prototype** has been developed and is being improved.
 
-Feedback and optional contact details should be handled separately from health-question records and used only for the stated purpose.
+### Available in the current prototype
 
-## 🧰 Technology
+- Language selection for Myanmar, English and Thai.
+- A guided menu-based experience for general health information.
+- Health topic navigation and a structured health-question journey.
+- Health education and awareness features.
+- Service information and pathways to relevant healthcare support.
 
-The current project uses:
+### Development in progress
 
-- **Node.js** for the bot application
-- **Telegram Bot API** via `node-telegram-bot-api`
-- **Express** for the health/status endpoint
-- **Google Apps Script / Google Sheets** for configured record-saving workflows
-- **Google Gemini API** for AI-generated general health education, when configured
+The current prototype is an early-stage foundation. The full AI-assisted health navigation experience, expanded clinician-reviewed content, broader user testing and strengthened referral workflows are planned development activities. They should not be interpreted as already completed or fully deployed features.
 
-Provider availability, model names, quotas and pricing can change. Check the provider's official documentation and account limits before deployment.
+We are taking an iterative approach: improve the working prototype, review content and user experience, test with intended users, and use feedback to guide the next development stages.
 
-## ⚙️ Configuration
+## 🗺️ 12-Month Development Roadmap
 
-Configure secrets in your hosting provider's environment-variable settings. **Do not commit API keys, bot tokens or Apps Script secrets to GitHub.**
+| Period | Planned milestone |
+|---|---|
+| **Months 1–3** | Improve the prototype, user experience and reliability of the planned AI-assisted functions. |
+| **Months 4–6** | Expand and review health information in Myanmar, English and Thai, prioritizing SRHR, menstrual health and maternal health. |
+| **Months 7–9** | Pilot with women, adolescents, young people and underserved communities; collect user feedback and improve accessibility. |
+| **Months 10–12** | Evaluate engagement, user satisfaction and referral pathways; document learning and explore partnerships for responsible scale-up. |
 
-| Environment variable | Purpose |
+### Intended results
+
+- Easier access to understandable health information.
+- Improved ability to navigate relevant health topics and support options.
+- More inclusive access through multilingual digital channels.
+- User feedback and learning to continuously improve the service.
+- Stronger connections between digital health information and appropriate human support.
+
+Specific targets and indicators will be established and monitored during implementation.
+
+## 🔐 Privacy, Safety & Responsible Use
+
+Trust and user safety are central to the development of Htuu Care.
+
+- The service is intended for general health education and navigation, not medical diagnosis or treatment.
+- Users should avoid sharing names, identity numbers, exact addresses or other unnecessary personal information.
+- Any use of AI-supported services must be accompanied by clear information about how submitted data may be processed.
+- Personal or health-related information should only be collected when necessary, with clear explanation and user consent.
+- Optional follow-up contact details should only be requested when a user explicitly asks to be contacted.
+- Health information and contact details should be protected with appropriate access controls and purpose limitation.
+- Users with urgent or emergency symptoms should seek immediate medical attention.
+
+Health content and referral pathways should be reviewed with qualified health professionals and relevant service providers.
+
+## 🤝 Implementation & Sustainability
+
+Htuu Care is being developed by **Trust Oo Co., Ltd.**, building on the organization's experience in digital health information and healthcare access.
+
+The initiative aims to combine technology, health expertise and partnerships to support responsible implementation. Potential collaboration areas include clinician-reviewed content, community-based piloting, referral coordination, language accessibility and technical development.
+
+Long-term sustainability will be explored through partnerships with healthcare organizations, development partners and institutions working in digital health, women's health and youth well-being.
+
+## 🛠️ Technology
+
+The current codebase includes:
+
+- **Node.js** — application runtime
+- **Telegram Bot API** with `node-telegram-bot-api` — messaging interface
+- **Express** — application health/status endpoint
+- **Google Apps Script / Google Sheets** — configured data-recording workflows
+- **Google Gemini API** — AI integration configured for development, subject to availability and testing
+
+Technology integrations and planned capabilities may evolve as the prototype is tested and improved.
+
+## ⚙️ Run & Configure
+
+### Environment variables
+
+Set secrets in your hosting provider's environment-variable settings. **Never commit API keys, Telegram bot tokens or shared secrets to the repository.**
+
+| Variable | Purpose |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `GEMINI_API_KEY` | Google Gemini API key |
-| `GEMINI_MODEL` | Gemini model name (optional; application default applies) |
-| `GOOGLE_APPS_SCRIPT_URL` | Deployed Google Apps Script `/exec` URL |
-| `GOOGLE_APPS_SCRIPT_SECRET` | Shared secret used by the Apps Script integration |
-| `PORT` | Hosting port (optional; defaults to 8080) |
+| `GEMINI_MODEL` | Optional Gemini model name |
+| `GOOGLE_APPS_SCRIPT_URL` | Deployed Google Apps Script endpoint |
+| `GOOGLE_APPS_SCRIPT_SECRET` | Shared secret for the Apps Script integration |
+| `PORT` | Application port; defaults to 8080 |
 
 ### Run locally
 
-1. Install a supported Node.js version.
+1. Install a supported version of Node.js.
 2. Clone this repository.
-3. Install the dependencies declared in `package.json`.
-4. Set the required environment variables in your local environment.
-5. Start the application using the start script declared in `package.json`.
+3. Install dependencies declared in `package.json`.
+4. Configure the required environment variables securely.
+5. Start the application using the start script in `package.json`.
 
-Never paste secrets into issues, chat messages, screenshots or source files.
+### Health endpoint
 
-### Health check
-
-When the application is running, open:
-
-```text
-/health
-```
-
-The endpoint reports application configuration status. It does not prove that every Telegram flow, AI request or Google Sheets write has been tested successfully.
-
-## 🗺️ Development Priorities
-
-- Complete and quality-check Myanmar, English and Thai localization across all bot screens and content.
-- Keep existing health-question, quiz and service-navigation flows stable.
-- Add an optional feedback rating and suggestion flow.
-- Request a telephone number only when the user explicitly asks for follow-up.
-- Store feedback and contact consent with clear purpose limitation and appropriate access controls.
-- Test the full user journey in all three languages before release.
+When the application is running, the `/health` endpoint provides application configuration status. A successful health response does not, by itself, confirm that every bot journey, AI response or data-saving workflow has been fully tested.
 
 ## 🏥 About Trust Oo
 
-Htuu Care is developed by **Trust Oo Co., Ltd.**, a Myanmar social enterprise working to improve access to health information and digital health services.
+**Trust Oo Co., Ltd.** is a Myanmar social enterprise working to improve access to digital health information and services.
 
-**Related service:** 7887 Healthcare Call Center
+Htuu Care is part of Trust Oo's wider commitment to making health information more accessible and connecting people with appropriate support.
+
+**Related service:** [7887 Healthcare Call Center](https://t.me/HtooCare_Bot)
 
 - Website: [Trust Oo](https://trustooglobal.com)
-- Telegram bot: [@HtooCare_Bot](https://t.me/HtooCare_Bot)
+- Telegram prototype: [@HtooCare_Bot](https://t.me/HtooCare_Bot)
 
 ---
 
-*Htuu Care provides general health education only. It does not diagnose conditions, prescribe treatment or replace qualified healthcare professionals. In an emergency, contact local emergency services or seek immediate medical care.*
+<p align="center">
+  <strong>Health information should be understandable, accessible and respectful to everyone.</strong>
+</p>
 
-**Developed by Trust Oo Co., Ltd.**  
-*Digital Health • Healthcare Access • Telehealth Innovation*
+<p align="center">
+  <em>Htuu Care — Supporting informed health decisions through digital access and human connection.</em>
+</p>
 
-#HtuuCare #TrustOo #DigitalHealth #HealthTech #HealthcareAccess #Myanmar
+#HtuuCare #DigitalHealth #SRHR #FemTech #HealthInformation #HealthcareAccess #TrustOo
